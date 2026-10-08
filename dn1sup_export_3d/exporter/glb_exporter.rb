@@ -87,6 +87,7 @@ module Dn1supExport3d
       # ------------------------------------------------------- entity nodes
 
       def entity_node(entity)
+        return nil unless visible?(entity)
         case entity
         when Sketchup::Group
           group_node(entity)

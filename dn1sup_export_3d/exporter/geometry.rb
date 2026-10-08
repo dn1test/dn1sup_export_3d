@@ -91,7 +91,15 @@ module Dn1supExport3d
         use_u32 = vertex_count > 65_535
         index_component = use_u32 ? GLBBuffer::COMPONENT_UNSIGNED_INT : GLBBuffer::COMPONENT_UNSIGNED_SHORT
         index_width = use_u32 ? 4 : 2
-        index_view = buffer.add_view(use_u32 ? @indices.pack("V*") : @indices.pack("v*"),
+        # Indices are global across the mesh, but each primitive addresses
+        # vertices through its own POSITION accessor, so rebase every group's
+        # slice to its local vertex range before packing (same total count,
+        # hence the per-group byteOffsets below stay valid).
+        rebased = @groups.flat_map do |group|
+          base = group["vertex_start"]
+          @indices[group["index_start"], group["index_count"]].map { |index| index - base }
+        end
+        index_view = buffer.add_view(use_u32 ? rebased.pack("V*") : rebased.pack("v*"),
                                      target: GLBBuffer::TARGET_ELEMENT_ARRAY_BUFFER)
 
         primitives = @groups.map do |group|

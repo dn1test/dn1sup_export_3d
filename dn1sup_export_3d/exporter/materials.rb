@@ -66,8 +66,10 @@ module Dn1supExport3d
       private
 
       def build(material)
-        r, g, b, alpha255 = material.color.to_a
-        alpha = alpha255 / 255.0
+        r, g, b = material.color.to_a
+        # Material#alpha is a 0.0..1.0 float in SketchUp 2026 (verified live);
+        # Color#to_a always reports alpha 255, so it cannot be used here.
+        alpha = material.alpha.to_f.clamp(0.0, 1.0)
         pbr = { "roughnessFactor" => 0.9, "metallicFactor" => 0.0 }
         texture_index = material.texture ? embed_texture(material.texture) : nil
         if texture_index
