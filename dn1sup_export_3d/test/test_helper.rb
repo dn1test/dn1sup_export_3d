@@ -62,7 +62,7 @@ module Dn1supTest
   # afterwards, leaving the user's model untouched. Pre-existing model content
   # is cleared inside the operation so tests run against a known scene.
   # Returns the parsed GLB.
-  def self.export_scene(name, scope: :all, path: nil)
+  def self.export_scene(name, scope: :all, include_hidden: false, path: nil)
     model = Sketchup.active_model
     raise TestFailure, "no active model" unless model
     model.start_operation("dn1sup_export_3d test: #{name}", true)
@@ -71,11 +71,18 @@ module Dn1supTest
       yield model
       path ||= File.join(Dir.tmpdir, "dn1sup_export_3d_tests", "#{name}.glb")
       FileUtils.mkdir_p(File.dirname(path))
-      Dn1supExport3d::Exporter::GLBExporter.new(model: model, scope: scope).export(path)
+      @last_stats = Dn1supExport3d::Exporter::GLBExporter.new(
+        model: model, scope: scope, include_hidden: include_hidden
+      ).export(path)
     ensure
       model.abort_operation
     end
     GLBParser.parse(path)
+  end
+
+  # Stats of the most recent export_scene call.
+  def self.last_stats
+    @last_stats
   end
 
   # Adds an axis-aligned cube with outward-facing normals; returns its faces.
@@ -162,38 +169,40 @@ module Dn1supTest
     ]
   end
 
-  # World-space bbox [min, max] of the mesh carried by a node. For mesh-less
-  # nodes (component instances) the union over all mesh-carrying descendants
-  # is returned. Computed from the POSITION accessors' declared min/max,
-  # transformed by the world matrix.
+  # World-space bbox [min, max] of a node subtree: the node's own mesh (if
+  # any) unioned with all mesh-carrying descendants. Computed from the
+  # POSITION accessors' declared min/max, transformed by the world matrix.
   def self.node_world_bbox(gltf, parser, node_index)
     node = gltf["nodes"][node_index]
     world = world_matrices(gltf)[node_index]
-    unless node["mesh"]
-      boxes = (node["children"] || []).filter_map { |child| node_world_bbox(gltf, parser, child) }
-      return nil if boxes.empty?
-      return [
-        3.times.map { |axis| boxes.map { |min, _| min[axis] }.min },
-        3.times.map { |axis| boxes.map { |_, max| max[axis] }.max }
+    boxes = []
+    if node["mesh"]
+      mins = nil
+      maxs = nil
+      gltf["meshes"][node["mesh"]]["primitives"].each do |prim|
+        accessor = gltf["accessors"][prim["attributes"]["POSITION"]]
+        mins = accessor["min"].dup if mins.nil?
+        maxs = accessor["max"].dup if maxs.nil?
+        3.times do |axis|
+          mins[axis] = [mins[axis], accessor["min"][axis]].min
+          maxs[axis] = [maxs[axis], accessor["max"][axis]].max
+        end
+      end
+      corners = [mins[0], maxs[0]].product([mins[1], maxs[1]], [mins[2], maxs[2]])
+      world_corners = corners.map { |c| mat_transform(world, c) }
+      boxes << [
+        3.times.map { |axis| world_corners.map { |c| c[axis] }.min },
+        3.times.map { |axis| world_corners.map { |c| c[axis] }.max }
       ]
     end
-    mesh = gltf["meshes"][node["mesh"]]
-    mins = nil
-    maxs = nil
-    mesh["primitives"].each do |prim|
-      accessor = gltf["accessors"][prim["attributes"]["POSITION"]]
-      mins = accessor["min"].dup if mins.nil?
-      maxs = accessor["max"].dup if maxs.nil?
-      3.times do |axis|
-        mins[axis] = [mins[axis], accessor["min"][axis]].min
-        maxs[axis] = [maxs[axis], accessor["max"][axis]].max
-      end
+    (node["children"] || []).each do |child|
+      box = node_world_bbox(gltf, parser, child)
+      boxes << box if box
     end
-    corners = [mins[0], maxs[0]].product([mins[1], maxs[1]], [mins[2], maxs[2]])
-    world_corners = corners.map { |c| mat_transform(world, c) }
+    return nil if boxes.empty?
     [
-      3.times.map { |axis| world_corners.map { |c| c[axis] }.min },
-      3.times.map { |axis| world_corners.map { |c| c[axis] }.max }
+      3.times.map { |axis| boxes.map { |min, _| min[axis] }.min },
+      3.times.map { |axis| boxes.map { |_, max| max[axis] }.max }
     ]
   end
 

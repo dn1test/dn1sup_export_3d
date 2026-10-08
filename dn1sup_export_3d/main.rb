@@ -5,6 +5,7 @@ require "fileutils"
 require_relative "version"
 require_relative "logger"
 require_relative "exporter/glb_exporter"
+require_relative "ui/export_dialog"
 
 module Dn1supExport3d
   MENU_TITLE = "Web 3D Export"
@@ -133,8 +134,10 @@ end
 module Dn1supExport3d
   unless file_loaded?("dn1sup_export_3d/main.rb")
     menu = UI.menu("Plugins").add_submenu(MENU_TITLE)
-    menu.add_item("Export current model to GLB") { menu_activate(:all) }
-    menu.add_item("Export selected objects to GLB") { menu_activate(:selection) }
+    menu.add_item("Export to GLB\u2026") { ExportDialog.show }
+    menu.add_separator
+    menu.add_item("Quick export current model to GLB") { menu_activate(:all) }
+    menu.add_item("Quick export selection to GLB") { menu_activate(:selection) }
     file_loaded("dn1sup_export_3d/main.rb")
   end
 end

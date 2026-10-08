@@ -24,8 +24,33 @@ Three.js viewer  (browser / HtmlDialog / any website)
 
 After installation, the menu **Extensions → Web 3D Export** appears with:
 
-- *Export current model to GLB* — exports everything visible;
-- *Export selected objects to GLB* — exports only the current selection.
+- *Export to GLB…* — the export dialog (recommended);
+- *Quick export current model to GLB* — one-click export of everything
+  visible, straight to a save panel;
+- *Quick export selection to GLB* — same, for the current selection.
+
+### Export dialog
+
+The dialog collects everything Phase 9 of AGENTS.md calls for:
+
+- **What to export** — entire model or the current selection (the selection
+  radio shows the live object count);
+- **Output file** — path field plus a Browse… save panel (defaults next to
+  the model file; `.glb` is appended automatically);
+- **Include hidden geometry** — off by default, matching the exporter's
+  visibility rules;
+- **Feedback** — an indeterminate "Exporting…" state while SketchUp is busy
+  (the export runs synchronously on the UI thread; SketchUp is not
+  thread-safe), then a result panel with faces/triangles/materials/textures,
+  file size and elapsed time;
+- **Post-export actions** — *Open 3D viewer* (the HtmlDialog viewer) and
+  *Open folder* (the web package directory).
+
+Errors (bad path, empty selection, export failures) are reported inside the
+dialog, not by crashing. The dialog uses the same bridge as the viewer:
+`window.sketchup.*` for JS → Ruby (`dialog_ready`, `browse_output`,
+`export_start`, `open_viewer`, `open_folder`, `cancel`) and
+`execute_script` for Ruby → JS (`window.exporter.receiveState(...)`).
 
 The exporter writes `model.glb` next to the chosen path and copies a
 self-contained web package to `<name>_web3d/`:
@@ -153,6 +178,7 @@ retained by the module (an unreferenced HtmlDialog can be garbage-collected).
 dn1sup_export_3d.rb          # registrar (sits next to the folder, like in Plugins)
 dn1sup_export_3d/
 ├── main.rb                  # menus, export flow, HtmlDialog bridge
+├── ui/                      # export dialog (export_dialog.html/css/js + class)
 ├── version.rb               # single source of the version
 ├── logger.rb
 ├── exporter/                # coordinate.rb, buffer.rb, geometry.rb,
@@ -171,10 +197,11 @@ Note on layout: the registrar lives at the repository root rather than in
 
 ### Tests
 
-The suite runs **inside SketchUp** (27 tests: GLB structure, geometry and
-transforms, materials/textures/UVs, instancing/metadata, export edge
-cases). Scenes are built inside an undo operation that is always aborted,
-so the user's model is never touched. Open the Ruby console and run:
+The suite runs **inside SketchUp** (29 tests: GLB structure, geometry and
+transforms, materials/textures/UVs, instancing/metadata, export edge cases
+including the dialog's `include_hidden` option and export stats). Scenes
+are built inside an undo operation that is always aborted, so the user's
+model is never touched. Open the Ruby console and run:
 
 ```ruby
 load "U:/dn1code/sketchup_ext/dn1sup_export_3d/dn1sup_export_3d/test/run_all.rb"

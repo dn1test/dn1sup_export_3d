@@ -29,6 +29,7 @@ Dn1supTest.test("Cube: meters, Y-up, sits on the floor, 12 triangles") do
 end
 
 Dn1supTest.test("Nested groups: node hierarchy with composed world transforms") do
+  inner_pid = nil
   glb = Dn1supTest.export_scene("geo_nested") do |model|
     ents = model.active_entities
     outer = ents.add_group
@@ -37,21 +38,23 @@ Dn1supTest.test("Nested groups: node hierarchy with composed world transforms") 
     inner = outer.entities.add_group
     inner.transformation = Geom::Transformation.translation([0, 50, 0])
     Dn1supTest.add_cube(inner.entities, 0, 0, 0, 10)
+    inner_pid = inner.persistent_id
   end
 
-  mesh_nodes = glb.gltf["nodes"].each_index.select { |i| glb.gltf["nodes"][i]["mesh"] }
-  Dn1supTest.assert(mesh_nodes.size >= 2, "expected meshes in nested groups")
-  bboxes = mesh_nodes.map { |i| Dn1supTest.node_world_bbox(glb.gltf, glb, i) }
+  # Whole-scene bbox from the root: outer cube at (100..110, 0..10, 0..10)in,
+  # inner at (100..110, 50..60, 0..10)in -> glTF z = -y.
+  min, max = Dn1supTest.node_world_bbox(glb.gltf, glb, 0)
+  Dn1supTest.assert_in_delta(100 * M, min[0], 1e-4, "scene min x")
+  Dn1supTest.assert_in_delta(110 * M, max[0], 1e-4, "scene max x")
+  Dn1supTest.assert_in_delta(0.0, min[1], 1e-5, "scene min y (on floor)")
+  Dn1supTest.assert_in_delta(-60 * M, min[2], 1e-4, "scene min z (inner cube y=60in)")
+  Dn1supTest.assert_in_delta(0.0, max[2], 1e-5, "scene max z (outer cube y=0)")
 
-  # Both cubes share x in (100..110)in; they differ in depth (glTF z):
-  # the outer group's cube sits at z in (-0.254..0), the inner one is
-  # shifted by +50in of SketchUp y -> glTF z in (-1.524..-1.27).
-  outer_min, outer_max = bboxes.max_by { |min, _| min[2] }
-  inner_min, inner_max = bboxes.min_by { |min, _| min[2] }
-  Dn1supTest.assert_in_delta(100 * M, outer_min[0], 1e-4, "outer cube world min x")
-  Dn1supTest.assert_in_delta(0.0, outer_min[1], 1e-5, "outer cube world min y (on floor)")
+  # Inner group alone, addressed by its persistent_id.
+  inner_index = Dn1supTest.find_node_by_pid(glb.gltf, inner_pid)
+  Dn1supTest.assert(inner_index, "inner group node found")
+  inner_min, inner_max = Dn1supTest.node_world_bbox(glb.gltf, glb, inner_index)
   Dn1supTest.assert_in_delta(100 * M, inner_min[0], 1e-4, "inner cube inherits x offset")
-  # inner cube: SketchUp y in (50..60)in -> glTF z in (-60*M .. -50*M)
   Dn1supTest.assert_in_delta(-60 * M, inner_min[2], 1e-4, "inner cube y offset appears as -z (min)")
   Dn1supTest.assert_in_delta(-50 * M, inner_max[2], 1e-4, "inner cube y offset appears as -z (max)")
   Dn1supTest.assert(glb.validate.empty?, "validation: #{glb.validate.join("; ")}")

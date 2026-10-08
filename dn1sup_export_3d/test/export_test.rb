@@ -39,6 +39,42 @@ Dn1supTest.test("Export does not modify the model") do
   end
 end
 
+Dn1supTest.test("Export returns stats describing the written file") do
+  glb = Dn1supTest.export_scene("export_stats") do |model|
+    Dn1supTest.add_cube(model.active_entities, 0, 0, 0, 10)
+  end
+  stats = Dn1supTest.last_stats
+  Dn1supTest.assert_equal(glb.path, stats[:path], "stats path")
+  Dn1supTest.assert_equal(6, stats[:faces], "faces")
+  Dn1supTest.assert_equal(12, stats[:triangles], "triangles")
+  Dn1supTest.assert_equal(1, stats[:meshes], "meshes")
+  Dn1supTest.assert(stats[:bytes].positive?, "bytes positive")
+  Dn1supTest.assert(stats[:seconds].is_a?(Numeric), "seconds numeric")
+end
+
+Dn1supTest.test("include_hidden option exports hidden geometry") do
+  glb = Dn1supTest.export_scene("export_include_hidden") do |model|
+    ents = model.active_entities
+    Dn1supTest.add_cube(ents, 0, 0, 0, 10)
+    hidden_group = ents.add_group
+    Dn1supTest.add_cube(hidden_group.entities, 100, 0, 0, 10)
+    hidden_group.visible = false
+  end
+  _, max = Dn1supTest.node_world_bbox(glb.gltf, glb, 0)
+  Dn1supTest.assert(max[0] < 99 * 0.0254, "hidden group excluded by default (max x = #{max[0].round(4)})")
+
+  glb = Dn1supTest.export_scene("export_include_hidden", include_hidden: true) do |model|
+    ents = model.active_entities
+    Dn1supTest.add_cube(ents, 0, 0, 0, 10)
+    hidden_group = ents.add_group
+    Dn1supTest.add_cube(hidden_group.entities, 100, 0, 0, 10)
+    hidden_group.visible = false
+  end
+  _, max = Dn1supTest.node_world_bbox(glb.gltf, glb, 0)
+  Dn1supTest.assert(max[0] > 99 * 0.0254, "hidden group included with include_hidden (max x = #{max[0].round(4)})")
+  Dn1supTest.assert_equal(2, Dn1supTest.last_stats[:meshes], "both meshes exported")
+end
+
 Dn1supTest.test("100-face grid exports under 5 seconds") do
   started = nil
   path = nil

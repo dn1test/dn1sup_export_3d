@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Export to GLB</title>
+<link rel="stylesheet" href="export_dialog.css">
+</head>
+<body>
+<div id="app">
+  <fieldset>
+    <legend>What to export</legend>
+    <label class="radio">
+      <input type="radio" name="scope" value="all" checked>
+      <span>Entire model</span>
+    </label>
+    <label class="radio">
+      <input type="radio" name="scope" value="selection">
+      <span>Selected objects only <span id="sel-count" class="hint"></span></span>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Output file</legend>
+    <div class="row">
+      <input type="text" id="path" spellcheck="false" placeholder="C:\path\to\model.glb">
+      <button id="btn-browse" type="button">Browse&#8230;</button>
+    </div>
+    <label class="radio">
+      <input type="checkbox" id="include-hidden">
+      <span>Include hidden geometry</span>
+    </label>
+  </fieldset>
+
+  <div id="status" class="hidden"></div>
+
+  <div id="results" class="hidden">
+    <div id="stats" class="mono"></div>
+    <div class="row">
+      <button id="btn-viewer" type="button" class="primary">Open 3D viewer</button>
+      <button id="btn-folder" type="button">Open folder</button>
+    </div>
+  </div>
+
+  <div class="row footer">
+    <span id="progress" class="hidden" aria-live="polite"><span class="spinner"></span> Exporting&#8230;</span>
+    <span class="spacer"></span>
+    <button id="btn-export" type="button" class="primary">Export</button>
+    <button id="btn-cancel" type="button">Cancel</button>
+  </div>
+</div>
+<script src="export_dialog.js"></script>
+</body>
+</html>

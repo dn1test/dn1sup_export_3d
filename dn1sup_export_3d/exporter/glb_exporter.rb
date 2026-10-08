@@ -24,7 +24,8 @@ module Dn1supExport3d
     # can map clicks back to SketchUp objects (AGENTS.md #14/#15).
     #
     # Visibility (documented rules, AGENTS.md #17): hidden entities and
-    # entities on hidden tags/layers are skipped at every level. Page-specific
+    # entities on hidden tags/layers are skipped at every level unless
+    # include_hidden: true is set (export dialog option). Page-specific
     # visibility overrides and "hide rest of model" are not applied.
     class GLBExporter
       MAGIC = 0x46546C67        # "glTF"
@@ -34,12 +35,17 @@ module Dn1supExport3d
 
       SCOPES = [:all, :selection].freeze
 
-      def initialize(model:, scope: :all)
-        raise ArgumentError, "Unknown scope #{scope.inspect} (expected one of #{SCOPES.join(', ')})" unless SCOPES.include?(scope)
+      def initialize(model:, scope: :all, include_hidden: false)
+        unless SCOPES.include?(scope)
+          raise ArgumentError, "Unknown scope #{scope.inspect} (expected one of #{SCOPES.join(', ')})"
+        end
         @model = model
         @scope = scope
+        @include_hidden = include_hidden
       end
 
+      # Returns a stats hash (path, faces, triangles, meshes, materials,
+      # textures, bytes, seconds) describing the written file.
       def export(path)
         started = Time.now
         @materials = MaterialConverter.new(buffer: @buffer = GLBBuffer.new)
@@ -51,14 +57,22 @@ module Dn1supExport3d
         gltf = assemble_gltf(root)
         write_glb(path, gltf)
 
-        triangles = @meshes.sum(&:triangle_count)
+        stats = {
+          path: path,
+          faces: @meshes.sum(&:face_count),
+          triangles: @meshes.sum(&:triangle_count),
+          meshes: @meshes.size,
+          materials: @materials.to_a.size,
+          textures: @materials.images.size,
+          bytes: File.size(path),
+          seconds: (Time.now - started).round(2)
+        }
         Logger.info(
-          "Exported #{@meshes.sum(&:face_count)} faces (#{triangles} triangles, " \
-          "#{@meshes.size} meshes, #{@materials.to_a.size} materials, " \
-          "#{@materials.images.size} textures) to #{path} " \
-          "in #{(Time.now - started).round(2)}s"
+          "Exported #{stats[:faces]} faces (#{stats[:triangles]} triangles, " \
+          "#{stats[:meshes]} meshes, #{stats[:materials]} materials, " \
+          "#{stats[:textures]} textures) to #{path} in #{stats[:seconds]}s"
         )
-        path
+        stats
       end
 
       private
@@ -188,6 +202,7 @@ module Dn1supExport3d
       end
 
       def visible?(entity)
+        return true if @include_hidden
         return false unless entity.visible?
         layer = entity.layer
         layer.nil? || layer.visible?
