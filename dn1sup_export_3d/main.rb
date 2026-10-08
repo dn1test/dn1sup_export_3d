@@ -9,6 +9,27 @@ require_relative "ui/export_dialog"
 
 module Dn1supExport3d
   MENU_TITLE = "Web 3D Export"
+  ICONS_DIR = File.join(__dir__, "icons")
+
+  def self.export_command
+    @export_command ||= begin
+      cmd = UI::Command.new("Export to GLB") { ExportDialog.show }
+      cmd.small_icon = File.join(ICONS_DIR, "export_16.png")
+      cmd.large_icon = File.join(ICONS_DIR, "export_24.png")
+      cmd.tooltip = "Export to GLB"
+      cmd.status_bar_text = "Export the model or the current selection to GLB"
+      cmd.menu_text = "Export to GLB\u2026"
+      cmd
+    end
+  end
+
+  def self.create_toolbar
+    return @toolbar if @toolbar
+    @toolbar = UI::Toolbar.new(MENU_TITLE)
+    @toolbar.add_item(export_command)
+    @toolbar.restore
+    @toolbar
+  end
 
   def self.menu_activate(scope = :all)
     model = Sketchup.active_model
@@ -134,10 +155,11 @@ end
 module Dn1supExport3d
   unless file_loaded?("dn1sup_export_3d/main.rb")
     menu = UI.menu("Plugins").add_submenu(MENU_TITLE)
-    menu.add_item("Export to GLB\u2026") { ExportDialog.show }
+    menu.add_item(export_command)
     menu.add_separator
     menu.add_item("Quick export current model to GLB") { menu_activate(:all) }
     menu.add_item("Quick export selection to GLB") { menu_activate(:selection) }
+    create_toolbar
     file_loaded("dn1sup_export_3d/main.rb")
   end
 end

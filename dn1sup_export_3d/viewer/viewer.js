@@ -5,6 +5,8 @@ import { OrbitControls } from "./vendor/three/OrbitControls.js";
 const canvas = document.getElementById("viewport");
 const info = document.getElementById("info");
 const status = document.getElementById("status");
+const treeBox = document.getElementById("tree");
+const treeFilter = document.getElementById("tree-filter");
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1e1f24);
@@ -29,6 +31,7 @@ let modelBox = null;
 let selectedPid = null;
 const meshesByPid = new Map(); // "persistent_id" -> [mesh]
 const extrasByPid = new Map(); // "persistent_id" -> extras.sketchup
+const nodesByPid = new Map(); // "persistent_id" -> owning node (for visibility)
 const originalMaterials = new Map(); // mesh -> material (while highlighted)
 const listeners = new Map(); // event name -> [callback]
 
@@ -46,9 +49,11 @@ function on(event, callback) {
 // GLTFLoader assigns glTF node.extras to node.userData; renderable meshes are
 // children of those nodes. Collect the full ancestor chain of metadata
 // (nearest owning object first, outermost component instance last) so clicks
-// can identify both the part and the instance it belongs to.
+// can identify both the part and the instance it belongs to. sketchupOwn
+// marks the nodes that carry extras themselves (tree + visibility targets).
 function inheritExtras(root) {
   root.traverse((obj) => {
+    const own = obj.userData && obj.userData.sketchup ? obj.userData.sketchup : null;
     const chain = [];
     let node = obj;
     while (node) {
@@ -58,6 +63,7 @@ function inheritExtras(root) {
     if (chain.length) {
       obj.userData.sketchup = chain[0];
       obj.userData.sketchupChain = chain;
+      obj.userData.sketchupOwn = own;
     }
   });
 }
@@ -65,6 +71,7 @@ function inheritExtras(root) {
 function collectMeshes(root) {
   meshesByPid.clear();
   extrasByPid.clear();
+  nodesByPid.clear();
   let triangles = 0;
   root.traverse((obj) => {
     if (!obj.isMesh) return;
@@ -78,14 +85,32 @@ function collectMeshes(root) {
       extrasByPid.set(key, sketchup);
     });
   });
+  // Separate pass: owning nodes may be non-mesh containers.
+  root.traverse((obj) => {
+    const own = obj.userData && obj.userData.sketchupOwn;
+    if (own && own.persistent_id !== undefined) {
+      nodesByPid.set(String(own.persistent_id), obj);
+    }
+  });
   return triangles;
+}
+
+// Hidden subtrees must not be pickable (Raycaster ignores .visible itself).
+function isShown(object) {
+  for (let node = object; node; node = node.parent) {
+    if (node.visible === false) return false;
+  }
+  return true;
 }
 
 function setHighlight(pid) {
   originalMaterials.forEach((material, mesh) => { mesh.material = material; });
   originalMaterials.clear();
   selectedPid = null;
-  if (pid === null || pid === undefined) return;
+  if (pid === null || pid === undefined) {
+    syncTree(null);
+    return;
+  }
   const meshes = meshesByPid.get(String(pid)) || [];
   // Instance meshes share glTF materials, so highlight via per-mesh clones.
   meshes.forEach((mesh) => {
@@ -99,6 +124,7 @@ function setHighlight(pid) {
     mesh.material = highlight;
   });
   if (meshes.length) selectedPid = String(pid);
+  syncTree(selectedPid);
 }
 
 function formatExtras(sketchup) {
@@ -141,6 +167,20 @@ function focusObject(pid) {
   return true;
 }
 
+// Viewer-side visibility of an object (AGENTS.md #19); does not touch the GLB.
+function setShowObject(pid, visible) {
+  const node = nodesByPid.get(String(pid));
+  if (!node) return false;
+  node.visible = !!visible;
+  const row = treeBox.querySelector(
+    `li[data-pid="${String(pid)}"] > details > summary > .tree-row, ` +
+    `li[data-pid="${String(pid)}"] > .tree-row`
+  );
+  if (row) row.classList.toggle("hidden-object", !visible);
+  emit("objectVisibilityChanged", { pid: String(pid), visible: !!visible });
+  return true;
+}
+
 function fitTo(box) {
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const center = sphere.center.clone();
@@ -166,8 +206,134 @@ function notifySketchUp(callback, args) {
   bridge[callback].apply(bridge, args);
 }
 
+// ------------------------------------------------------------- object tree
+
+function displayName(skp) {
+  return (skp && skp.name && skp.name.trim()) || (skp && skp.entity_type) || "Object";
+}
+
+function makeRow(skp) {
+  const row = document.createElement("div");
+  row.className = "tree-row";
+  const caret = document.createElement("span");
+  caret.className = "caret";
+  caret.textContent = "\u25B6";
+  row.appendChild(caret);
+  const badge = document.createElement("span");
+  badge.className = "badge " + (skp.entity_type || "Object").charAt(0);
+  badge.textContent = (skp.entity_type || "Object").charAt(0);
+  badge.title = skp.entity_type || "Object";
+  row.appendChild(badge);
+  const name = document.createElement("span");
+  name.className = "name";
+  name.textContent = displayName(skp);
+  name.title = `${displayName(skp)} (${skp.persistent_id})`;
+  row.appendChild(name);
+  const eye = document.createElement("button");
+  eye.className = "eye";
+  eye.textContent = "\u{1F441}";
+  eye.title = "Show/hide";
+  eye.onclick = (e) => {
+    e.stopPropagation();
+    const node = nodesByPid.get(String(skp.persistent_id));
+    setShowObject(skp.persistent_id, node ? node.visible === false : false);
+  };
+  row.appendChild(eye);
+  row.onclick = () => userSelect(skp.persistent_id);
+  return row;
+}
+
+function buildBranch(parentObject) {
+  const ul = document.createElement("ul");
+  parentObject.children.forEach((child) => {
+    const own = child.userData && child.userData.sketchupOwn;
+    if (!own || own.persistent_id === undefined) {
+      // Wrapper node without identity (e.g. the glTF scene group): splice its
+      // entries up one level instead of nesting another list.
+      if (child.children.length) {
+        const nested = buildBranch(child);
+        Array.from(nested.children).forEach((li) => ul.appendChild(li));
+      }
+      return;
+    }
+    const li = document.createElement("li");
+    li.dataset.pid = String(own.persistent_id);
+    if (child.children.length) {
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.appendChild(makeRow(own));
+      details.appendChild(summary);
+      details.appendChild(buildBranch(child));
+      li.appendChild(details);
+    } else {
+      const row = makeRow(own);
+      row.querySelector(".caret").style.visibility = "hidden";
+      li.appendChild(row);
+    }
+    ul.appendChild(li);
+  });
+  return ul;
+}
+
+function buildTree() {
+  treeBox.textContent = "";
+  treeBox.appendChild(buildBranch(modelRoot));
+  applyTreeFilter(treeFilter.value);
+}
+
+function syncTree(pid) {
+  treeBox.querySelectorAll(".tree-row.selected").forEach((row) => row.classList.remove("selected"));
+  if (pid === null || pid === undefined) return;
+  const li = treeBox.querySelector(`li[data-pid="${String(pid)}"]`);
+  if (!li) return;
+  const row = li.querySelector(".tree-row");
+  if (row) row.classList.add("selected");
+  let ancestor = li.parentElement;
+  while (ancestor && ancestor !== treeBox) {
+    if (ancestor.tagName === "DETAILS") ancestor.open = true;
+    ancestor = ancestor.parentElement;
+  }
+  if (row) row.scrollIntoView({ block: "nearest" });
+}
+
+// Hides rows that do not match; keeps ancestors of matches visible and open.
+function applyTreeFilter(query) {
+  const q = query.trim().toLowerCase();
+
+  function filterUl(ul) {
+    let any = false;
+    Array.from(ul.children).forEach((node) => {
+      if (node.tagName === "UL") {
+        if (filterUl(node)) any = true;
+        return;
+      }
+      const row = node.querySelector(".tree-row");
+      const nested = node.querySelector(":scope > details > ul");
+      const childMatch = nested ? filterUl(nested) : false;
+      const text = row ? row.textContent.toLowerCase() : "";
+      const selfMatch = q === "" || text.includes(q);
+      const show = selfMatch || childMatch;
+      node.style.display = show ? "" : "none";
+      const details = node.querySelector(":scope > details");
+      if (details) details.open = q !== "" && childMatch;
+      if (show) any = true;
+    });
+    return any;
+  }
+
+  filterUl(treeBox);
+}
+
+function userSelect(pid) {
+  if (!selectObject(pid)) return false;
+  notifySketchUp("object_selected", [String(pid)]);
+  return true;
+}
+
+// ------------------------------------------------------------------ load
+
 function loadModel(url) {
-  status.textContent = "Loading…";
+  status.textContent = "Loading\u2026";
   const loader = new GLTFLoader();
   loader.load(
     url,
@@ -178,6 +344,7 @@ function loadModel(url) {
       inheritExtras(modelRoot);
       modelBox = new THREE.Box3().setFromObject(modelRoot);
       const triangles = Math.round(collectMeshes(modelRoot));
+      buildTree();
       fit();
       status.textContent = `Loaded: ${meshesByPid.size} selectable objects, ${triangles} triangles`;
       emit("viewerReady", { url: url, objects: meshesByPid.size, triangles: triangles });
@@ -199,6 +366,7 @@ const api = {
   selectObject: selectObject,
   focusObject: focusObject,
   getObject: getObject,
+  setShowObject: setShowObject,
   clearSelection: clearSelection,
   fit: fit,
   reset: fit,
@@ -218,19 +386,28 @@ document.getElementById("btn-wire").onclick = () => {
     if (obj.isMesh && obj.material) obj.material.wireframe = wireframe;
   });
 };
+document.getElementById("btn-tree").onclick = () => {
+  document.body.classList.toggle("side-hidden");
+  resize();
+};
+treeFilter.addEventListener("input", () => applyTreeFilter(treeFilter.value));
 
 // -------------------------------------------------------------- picking
 
-canvas.addEventListener("pointerdown", (e) => {
+function pickAt(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const pointer = new THREE.Vector2(
-    ((e.clientX - rect.left) / rect.width) * 2 - 1,
-    -((e.clientY - rect.top) / rect.height) * 2 + 1
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1
   );
   const raycaster = new THREE.Raycaster();
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(modelRoot.children, true);
-  const hit = hits.find((h) => h.object.isMesh);
+  return hits.find((h) => h.object.isMesh && isShown(h.object)) || null;
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  const hit = pickAt(e.clientX, e.clientY);
   const chain = (hit && hit.object.userData && hit.object.userData.sketchupChain) || [];
   if (chain.length) {
     // Identify the outermost object (the component instance that was hit)
@@ -243,6 +420,16 @@ canvas.addEventListener("pointerdown", (e) => {
     notifySketchUp("object_selected", chainPids);
   } else {
     clearSelection();
+  }
+});
+
+canvas.addEventListener("dblclick", (e) => {
+  const hit = pickAt(e.clientX, e.clientY);
+  const chain = (hit && hit.object.userData && hit.object.userData.sketchupChain) || [];
+  if (chain.length) {
+    const outermost = chain[chain.length - 1];
+    userSelect(outermost.persistent_id);
+    focusObject(outermost.persistent_id);
   }
 });
 

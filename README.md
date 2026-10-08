@@ -143,18 +143,39 @@ viewer.loadModel(url);      // load a GLB
 viewer.selectObject(pid);   // highlight by SketchUp persistent_id -> bool
 viewer.focusObject(pid);    // move camera to the object -> bool
 viewer.getObject(pid);      // extras.sketchup metadata or null
+viewer.setShowObject(pid, visible); // viewer-side show/hide -> bool
 viewer.clearSelection();
 viewer.fit(); viewer.reset();
-viewer.on("viewerReady", cb);      // {url, objects, triangles}
-viewer.on("objectSelected", cb);   // extras.sketchup of the clicked object
+viewer.on("viewerReady", cb);            // {url, objects, triangles}
+viewer.on("objectSelected", cb);         // extras.sketchup of the clicked object
 viewer.on("selectionCleared", cb);
-viewer.on("loadError", cb);        // {url, error}
+viewer.on("objectVisibilityChanged", cb);// {pid, visible}
+viewer.on("loadError", cb);              // {url, error}
 ```
 
-Clicks raycast meshes (metadata is inherited from the owning node),
-highlight via per-mesh material clones (instances share materials), and the
-info panel uses `textContent` only — model metadata is never injected as
-HTML. Works both in a plain browser and inside the HtmlDialog.
+### Object tree
+
+The left panel lists the exported object hierarchy (groups, component
+instances and definitions, from the glTF node extras):
+
+- **click** a row to select the object in 3D (and in SketchUp, via the
+  bridge); the 3D click syncs back into the tree;
+- **double-click** focuses the camera on the object;
+- the **eye** toggles viewer-side visibility of the object (hidden objects
+  are also excluded from picking);
+- the **filter box** matches names/pids, showing matching rows and their
+- ancestors; the ☰ button collapses the panel.
+
+Clicks raycast meshes (metadata is inherited from the owning node chain),
+highlight via per-mesh material clones (instances share materials), and all
+panels use `textContent` only — model metadata is never injected as HTML.
+Works both in a plain browser and inside the HtmlDialog.
+
+## Toolbar
+
+The extension registers a **Web 3D Export** toolbar with a single cube-icon
+button that opens the export dialog (see `build/gen_icons.rb` for how the
+PNG icons are generated).
 
 ## HtmlDialog bridge
 

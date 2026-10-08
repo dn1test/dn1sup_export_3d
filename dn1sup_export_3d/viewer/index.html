@@ -8,14 +8,23 @@
 </head>
 <body>
 <div id="app">
-  <div id="toolbar">
-    <button id="btn-fit" title="Fit model">Fit</button>
-    <button id="btn-reset" title="Reset camera">Reset</button>
-    <button id="btn-wire" title="Toggle wireframe">Wire</button>
+  <div id="side">
+    <div id="side-header">
+      <input type="text" id="tree-filter" placeholder="Filter objects…" spellcheck="false">
+    </div>
+    <div id="tree"></div>
   </div>
-  <div id="info"></div>
-  <canvas id="viewport"></canvas>
-  <div id="status">Loading…</div>
+  <div id="stage">
+    <div id="toolbar">
+      <button id="btn-tree" title="Toggle object tree">&#9776;</button>
+      <button id="btn-fit" title="Fit model">Fit</button>
+      <button id="btn-reset" title="Reset camera">Reset</button>
+      <button id="btn-wire" title="Toggle wireframe">Wire</button>
+    </div>
+    <div id="info"></div>
+    <canvas id="viewport"></canvas>
+    <div id="status">Loading&#8230;</div>
+  </div>
 </div>
 <script type="importmap">
 { "imports": { "three": "./vendor/three/three.module.min.js" } }
