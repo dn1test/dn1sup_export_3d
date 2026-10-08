@@ -59,8 +59,10 @@ module Dn1supExport3d
     dialog.add_action_callback("viewer_ready") do |_context, object_count|
       Logger.info("Viewer ready (#{object_count} selectable objects)")
     end
-    dialog.add_action_callback("object_selected") do |_context, persistent_id|
-      select_by_persistent_id(persistent_id)
+    # The viewer sends the whole ancestor chain of pids (part -> instance);
+    # the first one that exists as an entity in the model gets selected.
+    dialog.add_action_callback("object_selected") do |_context, *pids|
+      select_by_persistent_id(pids)
     end
     dialog.set_file(File.expand_path(index_url))
     dialog.show
@@ -74,19 +76,20 @@ module Dn1supExport3d
     @dialog = nil
   end
 
-  # Finds an entity by persistent_id (depth-first) and selects it in the
-  # model. Read-only with respect to the model's geometry.
-  def self.select_by_persistent_id(persistent_id)
+  # Selects the first entity of the given pid chain that exists in the model
+  # (the viewer reports part pid first, its component instance last).
+  def self.select_by_persistent_id(pids)
     model = Sketchup.active_model
-    entity = find_by_persistent_id(model.entities, persistent_id.to_s)
-    if entity
+    Array(pids).each do |pid|
+      entity = find_by_persistent_id(model.entities, pid.to_s)
+      next unless entity
       model.selection.clear
       model.selection.add(entity)
-      Logger.info("Selected from viewer: #{entity.name.empty? ? entity.typename : entity.name} (#{entity.persistent_id})")
-    else
-      Logger.warn("Object #{persistent_id} reported by viewer was not found in the model")
+      Logger.info("Selected from viewer: #{entity.name.to_s.empty? ? entity.typename : entity.name} (#{entity.persistent_id})")
+      return entity
     end
-    entity
+    Logger.warn("Object(s) #{Array(pids).join(', ')} reported by viewer were not found in the model")
+    nil
   end
 
   def self.find_by_persistent_id(entities, pid, visited = {})
@@ -119,10 +122,10 @@ module Dn1supExport3d
     %w[index.html viewer.js viewer.css].each do |file|
       FileUtils.cp(File.join(src, file), web_dir)
     end
-    vendor_src = File.join(__dir__, "vendor", "three")
-    vendor_dst = File.join(web_dir, "vendor", "three")
-    FileUtils.mkdir_p(vendor_dst)
-    Dir.children(vendor_src).each { |f| FileUtils.cp(File.join(vendor_src, f), vendor_dst) }
+    # vendor/ is copied as a whole tree (three/ ES modules + utils/ that
+    # GLTFLoader.js imports from).
+    FileUtils.rm_rf(File.join(web_dir, "vendor"))
+    FileUtils.cp_r(File.join(__dir__, "vendor"), web_dir)
     web_dir
   end
 end

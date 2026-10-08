@@ -9,8 +9,6 @@ require_relative "../exporter/glb_exporter"
 require_relative "support/glb_parser"
 
 module Dn1supTest
-  class TestFailure < StandardError; end
-
   INCH = 0.0254 # inch -> meter, for expected-value math in tests
 
   @passed = []

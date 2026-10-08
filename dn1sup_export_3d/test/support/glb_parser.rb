@@ -5,6 +5,10 @@
 require "json"
 
 module Dn1supTest
+  # Defined here so the parser (and build/check_glb.rb) work standalone,
+  # without loading the rest of the test harness.
+  class TestFailure < StandardError; end
+
   class GLBParser
     attr_reader :gltf, :bin, :path
 

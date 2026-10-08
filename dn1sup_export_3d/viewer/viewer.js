@@ -28,6 +28,7 @@ scene.add(modelRoot);
 let modelBox = null;
 let selectedPid = null;
 const meshesByPid = new Map(); // "persistent_id" -> [mesh]
+const extrasByPid = new Map(); // "persistent_id" -> extras.sketchup
 const originalMaterials = new Map(); // mesh -> material (while highlighted)
 const listeners = new Map(); // event name -> [callback]
 
@@ -43,34 +44,39 @@ function on(event, callback) {
 }
 
 // GLTFLoader assigns glTF node.extras to node.userData; renderable meshes are
-// children of those nodes, so inherit the nearest ancestor's metadata for
-// picking and identification.
+// children of those nodes. Collect the full ancestor chain of metadata
+// (nearest owning object first, outermost component instance last) so clicks
+// can identify both the part and the instance it belongs to.
 function inheritExtras(root) {
   root.traverse((obj) => {
+    const chain = [];
     let node = obj;
     while (node) {
-      if (node.userData && node.userData.sketchup) {
-        obj.userData.sketchup = node.userData.sketchup;
-        return;
-      }
+      if (node.userData && node.userData.sketchup) chain.push(node.userData.sketchup);
       node = node.parent;
+    }
+    if (chain.length) {
+      obj.userData.sketchup = chain[0];
+      obj.userData.sketchupChain = chain;
     }
   });
 }
 
 function collectMeshes(root) {
   meshesByPid.clear();
+  extrasByPid.clear();
   let triangles = 0;
   root.traverse((obj) => {
     if (!obj.isMesh) return;
     const geometry = obj.geometry;
     triangles += geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3;
-    const pid = obj.userData && obj.userData.sketchup && obj.userData.sketchup.persistent_id;
-    if (pid !== undefined) {
-      const key = String(pid);
+    const chain = obj.userData.sketchupChain || [];
+    chain.forEach((sketchup) => {
+      const key = String(sketchup.persistent_id);
       if (!meshesByPid.has(key)) meshesByPid.set(key, []);
       meshesByPid.get(key).push(obj);
-    }
+      extrasByPid.set(key, sketchup);
+    });
   });
   return triangles;
 }
@@ -110,9 +116,9 @@ function clearSelection() {
 }
 
 function getObject(pid) {
-  const meshes = meshesByPid.get(String(pid));
-  if (!meshes || meshes.length === 0) return null;
-  return (meshes[0].userData && meshes[0].userData.sketchup) || null;
+  const key = String(pid);
+  if (!meshesByPid.has(key)) return null;
+  return extrasByPid.get(key) || null;
 }
 
 function selectObject(pid) {
@@ -152,11 +158,12 @@ function fit() {
   if (modelBox) fitTo(modelBox);
 }
 
-// JS -> Ruby bridge: HtmlDialog action callbacks are invoked through the
-// skp: scheme; only attempt it when running inside SketchUp.
-function notifySketchUp(callback, argument) {
-  if (!/SketchUp/i.test(navigator.userAgent)) return;
-  window.location.href = "skp:" + callback + "@" + (argument === undefined ? "" : argument);
+// JS -> Ruby bridge: HtmlDialog injects a global `sketchup` object whose
+// properties are the registered action callbacks; absent in normal browsers.
+function notifySketchUp(callback, args) {
+  const bridge = window.sketchup;
+  if (!bridge || typeof bridge[callback] !== "function") return;
+  bridge[callback].apply(bridge, args);
 }
 
 function loadModel(url) {
@@ -174,7 +181,7 @@ function loadModel(url) {
       fit();
       status.textContent = `Loaded: ${meshesByPid.size} selectable objects, ${triangles} triangles`;
       emit("viewerReady", { url: url, objects: meshesByPid.size, triangles: triangles });
-      notifySketchUp("viewer_ready", String(meshesByPid.size));
+      notifySketchUp("viewer_ready", [String(meshesByPid.size)]);
     },
     undefined,
     (err) => {
@@ -224,10 +231,16 @@ canvas.addEventListener("pointerdown", (e) => {
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(modelRoot.children, true);
   const hit = hits.find((h) => h.object.isMesh);
-  const sketchup = hit && hit.object.userData && hit.object.userData.sketchup;
-  if (sketchup && sketchup.persistent_id !== undefined) {
-    selectObject(sketchup.persistent_id);
-    notifySketchUp("object_selected", String(sketchup.persistent_id));
+  const chain = (hit && hit.object.userData && hit.object.userData.sketchupChain) || [];
+  if (chain.length) {
+    // Identify the outermost object (the component instance that was hit)
+    // while keeping the whole ancestor chain for the Ruby side: it selects
+    // the first pid that actually exists as an entity in the model.
+    const outermost = chain[chain.length - 1];
+    const chainPids = chain.map((sketchup) => String(sketchup.persistent_id));
+    selectObject(outermost.persistent_id);
+    emit("objectSelected", { ...chain[0], chain: chainPids });
+    notifySketchUp("object_selected", chainPids);
   } else {
     clearSelection();
   }
