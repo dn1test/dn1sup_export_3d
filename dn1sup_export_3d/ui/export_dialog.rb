@@ -172,20 +172,37 @@ module Dn1supExport3d
     end
 
     def execute(script)
-      @dialog.execute_script(script)
+      # Deferred pushes (UI.start_timer) can outlive a closed dialog.
+      @dialog&.execute_script(script)
     end
 
     # ------------------------------------------------------ JS callbacks
 
     def browse_output(current)
       dir = sanitize_folder(current) || last_folder || default_folder
+      # The picker must not run in the action-callback frame: execute_script
+      # issued right after a native modal inside that frame is silently
+      # dropped by the SU 2026 CEF (the picked folder never reached the
+      # page). One deferred timer step gives both the modal and the
+      # delivery a clean stack.
+      UI.start_timer(0.01, false) { pick_folder(dir) }
+    end
+
+    def pick_folder(dir)
       # Confirmed against the SU 2026.2 docs: options hash, returns a String
       # (single) or Array (multi-select is not requested, but normalize).
       result = UI.select_directory(title: "Выберите папку для экспорта", directory: dir)
-      return unless result
+      return if result.nil? # Esc / Cancel - keep the current value
       folder = result.is_a?(Array) ? result.first : result
       save_last_folder(folder)
       execute("window.exporter.setOutputFolder(#{json(folder)});")
+    rescue StandardError => e
+      # A silent death here would leave the dialog without feedback
+      # (AGENTS.md #27).
+      Logger.error("Folder browse failed: #{e.class}: #{e.message}\n#{e.backtrace[0, 5].join("\n")}")
+      @mode = "error"
+      @message = "Не удалось выбрать папку: #{e.message}"
+      push_state
     end
 
     def request_export(json_options)
