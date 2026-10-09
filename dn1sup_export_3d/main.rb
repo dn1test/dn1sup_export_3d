@@ -135,9 +135,10 @@ module Dn1supExport3d
 
   # Copies the GLB plus the built viewer next to it so the package can be
   # uploaded as-is (AGENTS.md #23): <name>_web3d/{model.glb, index.html,
-  # README.txt, assets/}. With single_file: true it also writes
-  # <name>.html next to the folder - one self-contained file (viewer plus
-  # the model as base64) that a customer can open by double-click.
+  # README.txt, THIRD-PARTY-NOTICES.txt, assets/}. With single_file: true it
+  # also writes <name>.html next to the folder - one self-contained file
+  # (viewer plus the model as base64) that a customer can open by
+  # double-click.
   def self.build_web_package(glb_path, single_file: false)
     base = File.basename(glb_path, ".glb")
     web_dir = File.join(File.dirname(glb_path), "#{base}_web3d")
@@ -150,6 +151,12 @@ module Dn1supExport3d
     assets = File.join(src, "assets")
     FileUtils.rm_rf(File.join(web_dir, "assets"))
     FileUtils.cp_r(assets, web_dir) if File.directory?(assets)
+    # The bundled three.js/Vue.js keep their MIT notice in every distributed
+    # artifact (AGENTS.md #34).
+    FileUtils.cp(
+      File.join(__dir__, "THIRD-PARTY-NOTICES.txt"),
+      File.join(web_dir, "THIRD-PARTY-NOTICES.txt")
+    )
     File.write(
       File.join(web_dir, "README.txt"),
       web_package_readme(base),
@@ -185,7 +192,12 @@ module Dn1supExport3d
     b64 = Base64.strict_encode64(File.binread(glb_path))
     boot = "<script>window.__VIEWER_BOOT={model:'data:model/gltf-binary;base64,#{b64}'," \
            "name:#{JSON.generate(File.basename(glb_path))}};</script>"
-    html = html.sub(/<head>/i, "<head>\n#{boot}")
+    # A single file travels alone, so the license notice goes into it as an
+    # HTML comment (AGENTS.md #34). The texts are also at
+    # github.com/mrdoob/three.js (LICENSE) and github.com/vuejs/core (LICENSE).
+    notice = "<!-- Bundled software: three.js (MIT, (c) 2010-2026 three.js authors), " \
+             "Vue.js (MIT, (c) 2018-present, Yuxi (Evan) You). -->"
+    html = html.sub(/<head>/i, "<head>\n#{notice}\n#{boot}")
     File.binwrite(single_file_path(glb_path), html)
     single_file_path(glb_path)
   end
@@ -201,6 +213,9 @@ module Dn1supExport3d
       Чтобы отправить модель заказчику одним файлом, используйте файл
       #{base}.html рядом с папкой: модель встроена в него, и он открывается
       двойным кликом в любом современном браузере.
+
+      THIRD-PARTY-NOTICES.txt - лицензии сторонних библиотек (three.js,
+      Vue.js), встроенных в просмотрщик.
     TEXT
   end
 end

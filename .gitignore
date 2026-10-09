@@ -1,0 +1,5 @@
+# Session notes of the coding agent
+.zcode/
+
+# Staging dir of build/package.rb
+build/rbz_staging/
