@@ -12,6 +12,7 @@ module Dn1supExport3d
     ext.version = VERSION
     ext.creator = "dn1desn"
     ext.copyright = "2026, dn1desn (MIT License)"
+    ext.id = "dn1sup_export_3d" if ext.respond_to?(:id=)
     Sketchup.register_extension(ext, true)
   end
   file_loaded("dn1sup_export_3d.rb")

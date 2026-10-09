@@ -361,3 +361,10 @@ MIT — see [LICENSE](LICENSE). The bundled three.js and Vue.js keep their MIT
 notices in every distributed artifact: `THIRD-PARTY-NOTICES.txt` travels in
 the RBZ and in every exported `_web3d/` package, and the single-file HTML
 export embeds a short notice as an HTML comment.
+
+---
+
+## Публикация на GitHub
+
+Как оформить репозиторий, чтобы DN1Sup Extension Store находил расширение,
+показывал его в каталоге и предлагал обновления, — см. [PUBLISHING.md](PUBLISHING.md).

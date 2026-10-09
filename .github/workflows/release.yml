@@ -1,0 +1,30 @@
+name: Build & Release RBZ
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # нужно для создания GitHub Release
+
+jobs:
+  release:
+    # windows-latest: build/package.rb пакует bsdtar'ом (tar -a = ZIP по
+    # расширению .rbz); на ubuntu `tar` — GNU и так не умеет.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Package RBZ
+        run: ruby build/package.rb
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/dn1sup_export_3d.rbz
