@@ -7,6 +7,7 @@
 # Uses Windows bsdtar (-a picks ZIP by extension), so no gems are required:
 #   ruby build/package.rb
 require "fileutils"
+require "json"
 
 root = File.expand_path("..", __dir__)
 name = "dn1sup_export_3d"
@@ -20,6 +21,32 @@ rbz = File.join(root, "build", "#{name}.rbz")
   next if File.file?(asset_path)
   warn "Missing built asset: #{asset_path}"
   abort "Run `npm run build` in web/ first, then package again."
+end
+
+# The Extension Store reads registry.json's version when checking updates;
+# both mirrors must match VERSION (AGENTS.md #36), otherwise the store card
+# would desynchronize from the shipped extension.
+require File.join(root, name, "version")
+%w[registry.json web/package.json].each do |mirror|
+  path = File.join(root, mirror)
+  abort "Missing #{path} - cannot verify the version mirror." unless File.file?(path)
+  begin
+    data = JSON.parse(File.read(path))
+  rescue JSON::ParserError => e
+    abort "Cannot parse #{path}: #{e.message}"
+  end
+  mirror_version =
+    if data.is_a?(Array)
+      data.dig(0, "version")                 # registry.json: [ { ... } ]
+    elsif data.key?("extensions")
+      data.dig("extensions", 0, "version")   # registry.json: { "extensions": [...] }
+    else
+      data["version"]                        # web/package.json
+    end
+  if mirror_version != Dn1supExport3d::VERSION
+    warn "#{mirror} version #{mirror_version.inspect} != VERSION #{Dn1supExport3d::VERSION}"
+    abort "Bump #{mirror} to #{Dn1supExport3d::VERSION} before packaging."
+  end
 end
 
 FileUtils.rm_rf(staging)
