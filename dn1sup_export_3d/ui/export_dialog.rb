@@ -62,20 +62,12 @@ module Dn1supExport3d
     end
 
     def initialize
-      @dialog = nil
-      @mode = "idle" # idle | exporting | done | error
-      @message = nil
-      @stats = nil
-      @warnings = []
-      @glb_path = nil
-      @web_dir = nil
-      @single_file_path = nil
-      @driver = nil
-      @selection_sync = nil
+      reset_state
     end
 
     # Returns the HtmlDialog (nil return would make programmatic use awkward).
     def show
+      reset_state
       @dialog = UI::HtmlDialog.new(
         dialog_title: "Экспорт 3D — Web 3D Export",
         preferences_key: "dn1sup_export_3d",
@@ -114,6 +106,21 @@ module Dn1supExport3d
       @driver&.stop!
       @driver = nil
       @selection_sync&.detach
+      @selection_sync = nil
+    end
+
+    # A reopened dialog starts clean: leftovers from a previous session
+    # (a stale error panel or result stats) must not leak into the new page.
+    def reset_state
+      @dialog = nil
+      @mode = "idle" # idle | exporting | done | error
+      @message = nil
+      @stats = nil
+      @warnings = []
+      @glb_path = nil
+      @web_dir = nil
+      @single_file_path = nil
+      @driver = nil
       @selection_sync = nil
     end
 
