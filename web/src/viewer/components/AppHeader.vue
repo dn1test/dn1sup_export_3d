@@ -5,11 +5,12 @@ import IconButton from "./IconButton.vue";
 defineProps({
   modelName: { type: String, default: "3D-модель" },
   wireframe: { type: Boolean, default: false },
+  edges: { type: Boolean, default: true },
   fullscreen: { type: Boolean, default: false },
   panelOpen: { type: Boolean, default: true },
 });
 
-defineEmits(["toggle-panel", "fit", "reset", "wire", "screenshot", "fullscreen", "help"]);
+defineEmits(["toggle-panel", "fit", "reset", "wire", "edges", "screenshot", "fullscreen", "help"]);
 </script>
 
 <template>
@@ -36,6 +37,9 @@ defineEmits(["toggle-panel", "fit", "reset", "wire", "screenshot", "fullscreen",
     </IconButton>
     <IconButton title="Каркасный режим (W)" :active="wireframe" @click="$emit('wire')">
       <Icon name="wire" />
+    </IconButton>
+    <IconButton title="Контурные линии (E)" :active="edges" @click="$emit('edges')">
+      <Icon name="edges" />
     </IconButton>
 
     <div class="mx-1 h-6 w-px bg-white/10"></div>

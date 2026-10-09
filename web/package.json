@@ -1,7 +1,7 @@
 {
   "name": "dn1sup-export-3d-web",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "Vue 3 + Tailwind sources for the viewer and export dialog of dn1sup_export_3d",
   "scripts": {

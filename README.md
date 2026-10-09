@@ -155,11 +155,20 @@ full-screen overlays for loading (with progress), load errors (with a
 double-click hint when opened as a local file) and help.
 
 The scene uses a fixed studio setup on a white background: a
-`RoomEnvironment` IBL for soft fill (neutral tone mapping keeps material
-colors close to SketchUp), a frontal key light and a back rim light; both
-cast shadows onto an invisible `ShadowMaterial` floor, so a soft shadow
-puddle stays visible under the model from any angle. The light rig and
-shadow frustum are re-fitted to the model bounds on every load.
+`RoomEnvironment` IBL for soft fill, a frontal key light and a back rim
+light; both cast shadows onto an invisible `ShadowMaterial` floor, so a
+soft shadow puddle stays visible under the model from any angle. The total
+light energy is tuned so a lit face reads close to the material's real
+color (neutral tone mapping, no wash-out), keeping the exported base
+colors/textures recognizable. The light rig and shadow frustum are
+re-fitted to the model bounds on every load.
+
+Every mesh gets thin **contour lines** on its feature edges (SketchUp-like
+look): an `EdgesGeometry` overlay per mesh with a 30° threshold, so
+triangulation diagonals stay invisible while real shape breaks are drawn
+as 1px dark lines. Edges are on by default, toggled from the header
+(**E**), shared between instances of the same component, hidden together
+with their object, and never intercept picking.
 
 `window.viewer` exposes a small API (AGENTS.md §22):
 
@@ -170,13 +179,14 @@ viewer.focusObject(pid);    // move camera to the object -> bool
 viewer.getObject(pid);      // extras.sketchup metadata or null
 viewer.setShowObject(pid, visible); // viewer-side show/hide -> bool
 viewer.clearSelection();
+viewer.toggleEdges();       // contour lines on/off -> bool
 viewer.fit(); viewer.reset();
 viewer.on("viewerReady", cb);             // {url, objects, triangles}
 viewer.on("objectSelected", cb);          // {pid, extras, chain|null}
 viewer.on("selectionCleared", cb);
 viewer.on("objectVisibilityChanged", cb); // {pid, visible}
 viewer.on("loadError", cb);               // {url, error}
-viewer.on("loadStart" / "progress" / "wireframe", cb); // extra events
+viewer.on("loadStart" / "progress" / "wireframe" / "edges", cb); // extra events
 ```
 
 ### Interaction
@@ -189,8 +199,8 @@ viewer.on("loadStart" / "progress" / "wireframe", cb); // extra events
 - the **filter box** matches names/types, showing matching rows and their
   ancestors; the ☰ button collapses the panel;
 - header actions: fit (**F**), reset camera (**R**), wireframe (**W**),
-  PNG screenshot, fullscreen, help (**?**); **Esc** clears the selection or
-  closes overlays.
+  contour edges (**E**), PNG screenshot, fullscreen, help (**?**); **Esc**
+  clears the selection or closes overlays.
 
 Clicks raycast meshes (metadata is inherited from the owning node chain),
 highlight via per-mesh material clones (instances share materials), and all

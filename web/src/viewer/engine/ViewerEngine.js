@@ -37,19 +37,21 @@ export default class ViewerEngine {
 
     // Студийная схема: IBL-окружение ("софтбоксы" RoomEnvironment) даёт
     // мягкую заливку, ключевой свет несёт тень, контровой отделяет модель
-    // от белого фона.
+    // от белого фона. Суммарная энергия подобрана так, чтобы освещённая
+    // грань была близка к альбедо материала (факту реального цвета), а не
+    // выбеливалась tone mapping'ом: пик ~1.1 вместо ~2.0.
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     pmrem.dispose();
-    this.scene.environmentIntensity = 0.55;
+    this.scene.environmentIntensity = 0.45;
 
-    this.keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    this.keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
     this.keyLight.castShadow = true;
     this.keyLight.shadow.mapSize.set(2048, 2048);
     this.keyLight.shadow.radius = 5;
     this.keyLight.shadow.bias = -0.0002;
     this.scene.add(this.keyLight, this.keyLight.target);
-    this.rimLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    this.rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
     // Тень контрового падает к камере: "лужа" тени видна с любого ракурса.
     this.rimLight.castShadow = true;
     this.rimLight.shadow.mapSize.set(2048, 2048);
@@ -73,6 +75,15 @@ export default class ViewerEngine {
     this.modelBox = null;
     this.selectedPid = null;
     this.wireframe = false;
+    // Контурные линии рёбер включены по умолчанию (вид как в SketchUp).
+    this.edgesVisible = true;
+    // Общий материал всех контуров: тонкая тёмная линия. LineBasicMaterial
+    // в WebGL всегда рисуется толщиной 1px (linewidth игнорируется), что и
+    // даёт нужную "тонкость"; toneMapped:false держит цвет постоянным.
+    this.edgeMaterial = new THREE.LineBasicMaterial({ color: 0x3c4046, toneMapped: false });
+    // Кэш EdgesGeometry по исходной геометрии: инстансы одного компонента
+    // делят её в glTF, расчёт контуров выполняется один раз (AGENTS.md #25).
+    this._edgeCache = new Map();
     this.stats = { objects: 0, triangles: 0 };
     this.meshesByPid = new Map(); // pid -> [mesh]
     this.extrasByPid = new Map(); // pid -> extras.sketchup
@@ -103,6 +114,9 @@ export default class ViewerEngine {
     this.controls.dispose();
     this.ground.geometry.dispose();
     this.ground.material.dispose();
+    this._edgeCache.forEach((geometry) => geometry.dispose());
+    this._edgeCache.clear();
+    this.edgeMaterial.dispose();
     this.renderer.dispose();
   }
 
@@ -130,10 +144,14 @@ export default class ViewerEngine {
     const loader = new GLTFLoader();
     const finish = (gltf) => {
       this._setHighlight(null);
+      // Контры прошлой модели ссылаются на её геометрию - освобождаем кэш.
+      this._edgeCache.forEach((geometry) => geometry.dispose());
+      this._edgeCache.clear();
       this.modelRoot.clear();
       gltf.scene.traverse((obj) => {
         if (obj.isMesh) obj.castShadow = true;
       });
+      this._addEdges(gltf.scene);
       this.modelRoot.add(gltf.scene);
       this._inheritExtras(this.modelRoot);
       this.modelBox = new THREE.Box3().setFromObject(this.modelRoot);
@@ -307,6 +325,53 @@ export default class ViewerEngine {
     });
     this.emit("wireframe", this.wireframe);
     return this.wireframe;
+  }
+
+  // ------------------------------------------------------- контурные линии
+
+  // Тонкие контуры рёбер у каждого меша (вид как в SketchUp). Порог 30°
+  // прячет диагонали триангуляции (угол копланарных треугольников 0°),
+  // оставляя реальные изломы формы. Контур - ребёнок меша: наследует
+  // трансформацию и скрывается вместе с объектом из дерева.
+  _addEdges(root) {
+    root.traverse((obj) => {
+      if (!obj.isMesh) return;
+      // Поверхность чуть сдвигается вглубь буфера глубины, иначе контур,
+      // лежащий ровно на грани, мерцает (z-fighting).
+      const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+      materials.forEach((m) => {
+        if (!m) return;
+        m.polygonOffset = true;
+        m.polygonOffsetFactor = 1;
+        m.polygonOffsetUnits = 1;
+      });
+      const edges = new THREE.LineSegments(this._edgeGeometryFor(obj.geometry), this.edgeMaterial);
+      edges.userData.isEdge = true;
+      // Иначе Raycaster ловит Line с порогом в мировых единицах и клики
+      // "залипали" бы на контуре вместо меша.
+      edges.raycast = () => {};
+      edges.visible = this.edgesVisible;
+      obj.add(edges);
+    });
+  }
+
+  // Инстансы одного компонента делят геометрию: расчёт контура - один раз.
+  _edgeGeometryFor(geometry) {
+    let edges = this._edgeCache.get(geometry.uuid);
+    if (!edges) {
+      edges = new THREE.EdgesGeometry(geometry, 30);
+      this._edgeCache.set(geometry.uuid, edges);
+    }
+    return edges;
+  }
+
+  toggleEdges() {
+    this.edgesVisible = !this.edgesVisible;
+    this.modelRoot.traverse((obj) => {
+      if (obj.userData && obj.userData.isEdge) obj.visible = this.edgesVisible;
+    });
+    this.emit("edges", this.edgesVisible);
+    return this.edgesVisible;
   }
 
   // ------------------------------------------------------- студийный свет

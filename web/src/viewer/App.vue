@@ -39,6 +39,7 @@ const visibility = ref({});
 const selectedPid = ref(null);
 const selectedExtras = ref(null);
 const wireframe = ref(false);
+const edges = ref(true);
 const panelOpen = ref(true);
 const activeTab = ref("objects");
 const filterQuery = ref("");
@@ -101,6 +102,9 @@ onMounted(() => {
   engine.on("wireframe", (v) => {
     wireframe.value = v;
   });
+  engine.on("edges", (v) => {
+    edges.value = v;
+  });
 
   engine.loadModel(modelUrl);
   document.title = `${modelName} — 3D-просмотр`;
@@ -113,6 +117,7 @@ onMounted(() => {
     getObject: (pid) => engine.getObject(pid),
     setShowObject: (pid, visible) => engine.setShowObject(pid, visible),
     clearSelection: () => engine.clearSelection(),
+    toggleEdges: () => engine.toggleEdges(),
     fit: () => engine.fit(),
     reset: () => engine.reset(),
     on: (event, cb) => engine.on(event, cb),
@@ -147,6 +152,9 @@ function onKeydown(e) {
       break;
     case "KeyW":
       engine.toggleWireframe();
+      break;
+    case "KeyE":
+      engine.toggleEdges();
       break;
     case "Escape":
       if (helpOpen.value) helpOpen.value = false;
@@ -213,12 +221,14 @@ const singleFileName = (() => {
     <AppHeader
       :model-name="modelName"
       :wireframe="wireframe"
+      :edges="edges"
       :fullscreen="isFullscreen"
       :panel-open="panelOpen"
       @toggle-panel="togglePanel"
       @fit="engine.fit()"
       @reset="engine.reset()"
       @wire="engine.toggleWireframe()"
+      @edges="engine.toggleEdges()"
       @screenshot="screenshot"
       @fullscreen="toggleFullscreen"
       @help="helpOpen = true"
