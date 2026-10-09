@@ -24,13 +24,23 @@ end
 
 FileUtils.rm_rf(staging)
 FileUtils.mkdir_p(staging)
+
+# CI runners put GNU tar (Git for Windows) on PATH ahead of the System32
+# bsdtar; GNU tar cannot write ZIP and misreads "D:\..." as a remote host.
+tar_exe =
+  if RUBY_PLATFORM.include?("mingw") || RUBY_PLATFORM.include?("mswin")
+    File.join(ENV["WINDIR"] || "C:\\Windows", "System32", "tar.exe")
+  else
+    "tar"
+  end
+
 FileUtils.cp(File.join(root, "#{name}.rb"), staging)
 FileUtils.cp(File.join(root, "LICENSE"), staging)
 FileUtils.cp_r(File.join(root, name), staging)
 FileUtils.rm_rf(File.join(staging, name, "test"))
 
 Dir.chdir(staging) do
-  ok = system("tar", "-a", "-c", "-f", rbz, "#{name}.rb", "LICENSE", name)
+  ok = system(tar_exe, "-a", "-c", "-f", rbz, "#{name}.rb", "LICENSE", name)
   raise "tar failed - is bsdtar available on PATH?" unless ok
 end
 FileUtils.rm_rf(staging)
