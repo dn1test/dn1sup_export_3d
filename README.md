@@ -262,6 +262,19 @@ npm run dev:viewer     # or dev:dialog
 npm run build          # writes dn1sup_export_3d/viewer/ and dn1sup_export_3d/ui/
 ```
 
+### Dependencies
+
+| Name | Version | License | Purpose | Distribution |
+|------|---------|---------|---------|--------------|
+| [three](https://threejs.org) | 0.186.1 | MIT | 3D engine, GLTFLoader/OrbitControls in the viewer | bundled into `viewer/assets/viewer.js`, notice in `THIRD-PARTY-NOTICES.txt` |
+| [vue](https://vuejs.org) | 3.5.43 | MIT | UI framework of both GUIs | bundled into both `assets/*.js`, notice in `THIRD-PARTY-NOTICES.txt` |
+| vite | 7.3.7 | MIT | bundler (dev-only) | not distributed |
+| @vitejs/plugin-vue | 6.0.9 | MIT | Vue SFC support in Vite (dev-only) | not distributed |
+| tailwindcss / @tailwindcss/vite | 4.3.3 | MIT | CSS framework (dev-only) | not distributed |
+
+Node.js and the `web/` folder are needed only for development; the RBZ and
+the exported web packages ship pre-built, committed assets only.
+
 `build_single_file_html` (main.rb) inlines the built viewer and the GLB
 (base64 `window.__VIEWER_BOOT.model`) into the single-file HTML at export
 time — pure Ruby, no Node on the user's machine.
@@ -307,6 +320,7 @@ ruby build/package.rb     # -> build/dn1sup_export_3d.rbz (uses bsdtar, no gems)
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Three.js and its examples (GLTFLoader,
-OrbitControls) are npm dependencies of the `web/` build and keep their MIT
-notice.
+MIT — see [LICENSE](LICENSE). The bundled three.js and Vue.js keep their MIT
+notices in every distributed artifact: `THIRD-PARTY-NOTICES.txt` travels in
+the RBZ and in every exported `_web3d/` package, and the single-file HTML
+export embeds a short notice as an HTML comment.

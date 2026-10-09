@@ -139,14 +139,23 @@ extension/
 │   │
 │   ├── viewer/
 │   │   ├── index.html
-│   │   ├── viewer.js
-│   │   └── viewer.css
+│   │   └── assets/
+│   │       └── viewer.js        (built bundle, committed)
 │   │
-│   ├── vendor/
-│   │   └── ...
+│   ├── ui/
+│   │   ├── export_dialog.rb
+│   │   ├── export_dialog.html
+│   │   └── assets/
+│   │       └── export_dialog.js (built bundle, committed)
+│   │
+│   ├── THIRD-PARTY-NOTICES.txt
 │   │
 │   └── resources/
 │       └── ...
+│
+├── web/                          (npm/Vite sources of the GUIs)
+│   ├── package.json
+│   └── src/
 │
 └── build/
 ```
@@ -600,7 +609,11 @@ Three.js should be used through `GLTFLoader` for GLB loading.
 
 Do not make the viewer dependent on a remote CDN for the distributed SketchUp extension.
 
-For the extension's local viewer, vendor the required JavaScript assets.
+Three.js (and the other runtime GUI libraries, e.g. Vue.js) are npm
+dependencies of the `web/` project and are bundled by Vite into the
+committed single-file IIFE assets (`viewer/assets/viewer.js`,
+`ui/assets/export_dialog.js`). Their MIT license notices must ship with
+every distributed artifact (THIRD-PARTY-NOTICES.txt / HTML comment).
 
 A production web deployment may use npm/bundling/CDN according to the website's architecture.
 
@@ -922,23 +935,28 @@ Do not randomly modify offsets and buffer lengths.
 
 # 32. Build system
 
-If the web viewer uses npm/Vite during development, source code may be:
+The GUIs (viewer and export dialog) are Vue 3 + Tailwind apps built by
+Vite from the `web/` sources:
 
 ```text
 web/
 ├── package.json
-├── src/
-└── vite.config.js
+├── index.html              (viewer entry)
+├── export_dialog.html      (dialog entry)
+├── vite.viewer.config.mjs
+├── vite.dialog.config.mjs
+└── src/
 ```
 
-Build output should be copied into the SketchUp extension:
+`npm run build` writes the built assets directly into the extension
+folders (`dn1sup_export_3d/viewer/`, `dn1sup_export_3d/ui/`). The output
+is a classic-script IIFE bundle (`base: "./"`, `target: "es2017"`, CSS
+inlined) so it works in `UI::HtmlDialog` and from a double-clicked
+`file://` page. Built bundles are committed to git.
 
-```text
-extension_name/
-└── viewer/
-```
-
-The distributed RBZ should not require npm.
+The distributed RBZ is packaged from the extension folder with
+`ruby build/package.rb` and must not require npm; `package.rb` refuses
+to run when the built bundles are missing.
 
 ---
 
