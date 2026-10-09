@@ -79,10 +79,21 @@ Errors (bad path, empty selection, export failures) are reported inside the
 dialog, not by crashing. The dialog uses the same bridge as the viewer:
 `window.sketchup.*` for JS → Ruby (`dialog_ready`, `browse_output`,
 `export_start`, `export_cancel`, `preview_refresh`, `preview_object_selected`,
-`open_viewer`, `open_folder`, `open_html`, `close`) and `execute_script` for
-Ruby → JS (`window.exporter.receiveState / receiveProgress /
+`open_viewer`, `open_folder`, `open_html`, `close`, `pong`) and `execute_script`
+for Ruby → JS (`window.exporter.receiveState / receiveProgress /
 receivePreviewStatus / receivePreviewStart / receivePreviewChunk /
 receivePreviewEnd / receiveSelection / setOutputFolder`).
+
+**Bridge heartbeat.** SketchUp 2026 CEF can rot the dialog's JS ↔ Ruby channel
+after it has lived through exports and native modals: action callbacks start
+arriving with delays of tens of seconds, so result-panel buttons look dead
+(the DOM-side facet of the same bug is worked around in
+`web/src/shared/cef_event_bridge.js`). The dialog self-heals: a repeating
+timer pings the page (`pong`), and when the roundtrip stalls for ~30 s the
+dialog is recreated with its state preserved (a fresh HtmlDialog renderer has
+a healthy channel — verified live). After two recreations without a single
+pong the auto-heal stops and the user is told to reopen the dialog or
+restart SketchUp.
 
 The exporter writes `model.glb` next to the chosen path and copies a
 self-contained web package to `<name>_web3d/`:

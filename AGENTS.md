@@ -682,7 +682,7 @@ JS → Ruby action callbacks
   viewer dialog:  viewer_ready, object_selected
   export dialog:  dialog_ready, browse_output, export_start, export_cancel,
                   preview_refresh, preview_object_selected, open_viewer,
-                  open_folder, open_html, close
+                  open_folder, open_html, close, pong (bridge heartbeat reply)
 
 Ruby → JS (window.exporter.*)
   receiveState, setOutputFolder, receiveProgress, receivePreviewStatus,

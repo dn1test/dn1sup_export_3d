@@ -25,7 +25,7 @@ module Dn1supExport3d
   # Bridge (window.sketchup.* from JS, window.exporter.* from Ruby):
   #   JS -> Ruby: dialog_ready, browse_output, export_start, export_cancel,
   #               preview_refresh, preview_object_selected, open_viewer,
-  #               open_folder, open_html, close
+  #               open_folder, open_html, close, pong (heartbeat reply)
   #   Ruby -> JS: receiveState, setOutputFolder, receiveProgress,
   #               receivePreviewStatus, receivePreviewStart/Chunk/End,
   #               receiveSelection
@@ -37,6 +37,20 @@ module Dn1supExport3d
     # Base64 chars per execute_script call - keeps every bridge message
     # small enough for the CEF IPC.
     PREVIEW_CHUNK_CHARS = 1_000_000
+
+    # Bridge-health heartbeat. SU 2026 CEF rots the JS <-> Ruby channel of a
+    # dialog that has lived through exports and native modals: action
+    # callbacks start arriving with delays of tens of seconds (result-panel
+    # buttons look dead; measured live - state, files and handlers are fine).
+    # A repeating timer pings the page; when the pong roundtrip stalls for
+    # PONG_TIMEOUT, the dialog is recreated with its state preserved, because
+    # a fresh HtmlDialog renderer has a healthy channel.
+    HEARTBEAT_INTERVAL = 5.0
+    PONG_TIMEOUT = 30.0
+    # Recreations without a single successful pong before auto-heal gives up
+    # (a loop guard for a process-wide CEF degradation; only SketchUp restart
+    # helps then).
+    MAX_CONSECUTIVE_HEALS = 2
 
     # Sketchup.read_default / write_default section for dialog settings.
     SETTINGS_SECTION = "dn1sup_export_3d"
@@ -66,8 +80,10 @@ module Dn1supExport3d
     end
 
     # Returns the HtmlDialog (nil return would make programmatic use awkward).
-    def show
-      reset_state
+    # reset: false is used by heal_dialog - a healed dialog keeps its result
+    # state (mode/stats/artifact paths) so the user gets the same panel back.
+    def show(reset: true)
+      reset_state if reset
       @dialog = UI::HtmlDialog.new(
         dialog_title: "Экспорт 3D — Web 3D Export",
         preferences_key: "dn1sup_export_3d",
@@ -77,10 +93,15 @@ module Dn1supExport3d
       )
       register_callbacks
       @dialog.set_file(File.join(__dir__, "export_dialog.html"))
-      @dialog.set_on_closed { teardown }
+      # Capture the dialog: the block must tear down exactly the dialog it
+      # was registered on - a healed-out old dialog closing late (on_closed
+      # may fire asynchronously) must not tear down its replacement.
+      closed = @dialog
+      @dialog.set_on_closed { teardown_dialog(closed) }
       @dialog.show
       @selection_sync = SelectionSync.new { push_selection }
       @selection_sync.attach
+      start_heartbeat
       @dialog
     end
 
@@ -99,10 +120,23 @@ module Dn1supExport3d
       @dialog.add_action_callback("open_folder") { open_folder }
       @dialog.add_action_callback("open_html") { open_html }
       @dialog.add_action_callback("close") { @dialog.close }
+      # Heartbeat reply (see start_heartbeat): only the arrival time and the
+      # fact itself matter, there is no payload.
+      @dialog.add_action_callback("pong") do |_ctx, _payload|
+        @last_pong = Time.now.to_f
+        @consecutive_heals = 0
+      end
     end
 
-    # Cleanup when the dialog closed (also via the title-bar X).
+    # Cleanup when the dialog closed (also via the title-bar X). Only runs
+    # for the dialog the on_closed block was registered on.
+    def teardown_dialog(closed)
+      return unless @dialog&.equal?(closed)
+      teardown
+    end
+
     def teardown
+      stop_heartbeat
       @driver&.stop!
       @driver = nil
       @selection_sync&.detach
@@ -122,6 +156,10 @@ module Dn1supExport3d
       @single_file_path = nil
       @driver = nil
       @selection_sync = nil
+      @heartbeat = nil
+      @last_pong = 0.0
+      @overdue = 0
+      @consecutive_heals = 0
     end
 
     # ------------------------------------------------------- state pushes
@@ -192,6 +230,10 @@ module Dn1supExport3d
       # Confirmed against the SU 2026.2 docs: options hash, returns a String
       # (single) or Array (multi-select is not requested, but normalize).
       result = UI.select_directory(title: "Выберите папку для экспорта", directory: dir)
+      # The native modal suspends SketchUp timers - its duration must not
+      # count as a dead bridge on the first tick afterwards.
+      @last_pong = Time.now.to_f
+      @overdue = 0
       return if result.nil? # Esc / Cancel - keep the current value
       folder = result.is_a?(Array) ? result.first : result
       save_last_folder(folder)
@@ -368,6 +410,79 @@ module Dn1supExport3d
     def replace_driver
       @driver&.stop!
       @driver = nil
+    end
+
+    # ------------------------------------------------------- heartbeat
+
+    def start_heartbeat
+      stop_heartbeat
+      # "Fresh" until the first measurement: page load gets a full
+      # PONG_TIMEOUT of grace. @consecutive_heals is NOT reset here - it must
+      # survive heal_dialog's show(reset: false) to cap the heal loop.
+      @last_pong = Time.now.to_f
+      @heartbeat = UI.start_timer(HEARTBEAT_INTERVAL, true) { heartbeat_tick }
+    end
+
+    def stop_heartbeat
+      UI.stop_timer(@heartbeat) if @heartbeat
+      @heartbeat = nil
+    end
+
+    def heartbeat_tick
+      now = Time.now.to_f
+      if !@dialog || !@dialog.visible? || @driver&.running?
+        # A hidden dialog and an export/preview driver legitimately stop the
+        # roundtrip - neither counts as a dead bridge.
+        @last_pong = now
+        @overdue = 0
+        return
+      end
+      @dialog.execute_script("window.sketchup.pong && window.sketchup.pong()")
+      if now - @last_pong <= PONG_TIMEOUT
+        @overdue = 0
+        return
+      end
+      # Two consecutive overdue ticks are required: one may be a busy or
+      # modal-bound UI thread (native pickers suspend SketchUp timers).
+      @overdue += 1
+      return if @overdue < 2
+
+      if @consecutive_heals >= MAX_CONSECUTIVE_HEALS
+        stop_heartbeat
+        Logger.error(
+          "Export dialog bridge silent for #{(now - @last_pong).round}s after " \
+          "#{@consecutive_heals} recreations - auto-heal disabled for this dialog"
+        )
+        begin
+          UI.messagebox(
+            "Канал диалога экспорта перестал отвечать (SketchUp 2026 CEF).\n\n" \
+            "Закройте диалог и откройте его заново или перезапустите SketchUp."
+          )
+        rescue StandardError => e
+          Logger.error("Bridge-dead messagebox failed: #{e.class}: #{e.message}")
+        end
+        return
+      end
+      Logger.warn(
+        "Export dialog bridge silent for #{(now - @last_pong).round}s - " \
+        "recreating the dialog (state preserved)"
+      )
+      heal_dialog
+    end
+
+    # A fresh HtmlDialog renderer has a healthy JS <-> Ruby channel (measured
+    # live). Recreate the dialog, keep the result state and re-push it: the
+    # user gets the same panel back with working buttons.
+    def heal_dialog
+      @consecutive_heals += 1
+      old = @dialog
+      @dialog = nil # the old dialog's on_closed must not tear down the next one
+      @driver&.stop!
+      @driver = nil
+      @selection_sync&.detach
+      @selection_sync = nil
+      old&.close if old&.visible?
+      show(reset: false)
     end
 
     # ---------------------------------------------------------- actions
