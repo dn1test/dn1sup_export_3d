@@ -8,7 +8,7 @@ Primary target:
 
 ```text
 SketchUp 2026
-Ruby API 3.2
+Ruby 3.2 (bundled)
         │
         ▼
    Ruby Extension
@@ -73,7 +73,7 @@ Primary environment:
 ```text
 SketchUp 2026
 Windows 11
-Ruby API 3.2.x
+Ruby 3.2 (interpreter bundled with SketchUp 2026)
 ```
 
 The extension must use the Ruby environment shipped with SketchUp.
@@ -115,50 +115,73 @@ SketchUp Extension
     └── Three.js
 ```
 
-Recommended structure:
+Actual structure (repository root). The registrar sits at the root, not in
+`src/`, so that repository layout == RBZ layout == installed Plugins layout:
 
 ```text
-extension/
+dn1sup_export_3d/                 (repository root)
 │
 ├── AGENTS.md
 ├── README.md
-├── LICENSE
+├── PUBLISHING.md                 (Extension Store publishing rules)
+├── LICENSE                       (MIT)
+├── registry.json                 (Extension Store card: id, name, version;
+│                                  mirrors VERSION, enforced by package.rb)
 │
-├── src/
-│   └── extension_name.rb
+├── dn1sup_export_3d.rb           (lightweight registrar, at the root)
 │
-├── extension_name/
-│   ├── main.rb
+├── dn1sup_export_3d/             (extension folder = RBZ payload)
+│   ├── main.rb                   (menu, toolbar, viewer HtmlDialog, export)
+│   ├── version.rb                (VERSION — single authoritative source)
+│   ├── logger.rb
+│   ├── filename.rb               (safe output filename transliteration)
 │   │
 │   ├── exporter/
-│   │   ├── glb_exporter.rb
-│   │   ├── geometry.rb
-│   │   ├── materials.rb
-│   │   ├── textures.rb
-│   │   └── metadata.rb
+│   │   ├── glb_exporter.rb       (GLB assembly + node metadata/extras)
+│   │   ├── geometry.rb           (triangulation via Sketchup::Face#mesh)
+│   │   ├── materials.rb          (materials + texture embedding)
+│   │   ├── coordinate.rb         (the only place axes/units are converted)
+│   │   └── buffer.rb             (GLB binary buffer writer)
 │   │
 │   ├── viewer/
 │   │   ├── index.html
 │   │   └── assets/
-│   │       └── viewer.js        (built bundle, committed)
+│   │       └── viewer.js         (built bundle, committed)
 │   │
 │   ├── ui/
 │   │   ├── export_dialog.rb
+│   │   ├── export_driver.rb      (stepwise export via UI.start_timer)
+│   │   ├── selection_sync.rb     (SelectionObserver: dialog follows the
+│   │   │                          SketchUp selection while the dialog is open)
 │   │   ├── export_dialog.html
 │   │   └── assets/
-│   │       └── export_dialog.js (built bundle, committed)
+│   │       └── export_dialog.js  (built bundle, committed)
 │   │
-│   ├── THIRD-PARTY-NOTICES.txt
-│   │
-│   └── resources/
-│       └── ...
+│   ├── icons/                    (export_16.png, export_24.png)
+│   ├── test/                     (in-SketchUp tests; excluded from RBZ)
+│   └── THIRD-PARTY-NOTICES.txt
 │
-├── web/                          (npm/Vite sources of the GUIs)
+├── web/                          (npm/Vite sources of the GUIs; not distributed)
 │   ├── package.json
+│   ├── index.html                (viewer entry)
+│   ├── export_dialog.html        (dialog entry)
+│   ├── vite.viewer.config.mjs
+│   ├── vite.dialog.config.mjs
+│   ├── scripts/
+│   │   └── vite-plugin-classic-html.mjs
 │   └── src/
 │
-└── build/
+├── build/                        (dev tooling; not distributed)
+│   ├── package.rb                (RBZ packager)
+│   ├── check_glb.rb              (standalone GLB validator, plain Ruby)
+│   └── gen_icons.rb
+│
+└── .github/workflows/release.yml (tag v* → package.rb → .rbz attached to
+                                    a GitHub Release; no npm in CI)
 ```
+
+Texture handling lives in `exporter/materials.rb`; node metadata lives in
+`exporter/glb_exporter.rb` — there are no separate `textures.rb`/`metadata.rb`.
 
 The exact directory structure may evolve if there is a clear technical reason.
 
@@ -376,15 +399,15 @@ SketchUp internally uses its own length representation.
 
 The exported model must use a clearly documented unit convention.
 
-The preferred web representation should be:
+The web representation is:
 
 ```text
 1 unit = 1 meter
 ```
 
-if compatible with the selected GLTF pipeline.
-
-However, verify the exact glTF convention before implementation.
+This is the confirmed glTF 2.0 convention — the spec defines geometry units
+as meters. The single conversion constant `INCH_TO_METER = 0.0254` (SketchUp
+stores lengths in inches) lives in `exporter/coordinate.rb`.
 
 All conversion constants must be centralized.
 
@@ -566,6 +589,9 @@ Possible scopes:
 :visible
 ```
 
+Status: `:all` and `:selection` are implemented (`SCOPES` in
+`exporter/glb_exporter.rb`); `:visible` is pending.
+
 ---
 
 # 19. Web viewer
@@ -649,6 +675,23 @@ exportModel
 refreshModel
 ```
 
+Actual bridge implemented in this project (see README for the full table):
+
+```text
+JS → Ruby action callbacks
+  viewer dialog:  viewer_ready, object_selected
+  export dialog:  dialog_ready, browse_output, export_start, export_cancel,
+                  preview_refresh, preview_object_selected, open_viewer,
+                  open_folder, open_html, close
+
+Ruby → JS (window.exporter.*)
+  receiveState, setOutputFolder, receiveProgress, receivePreviewStatus,
+  receivePreviewStart, receivePreviewChunk, receivePreviewEnd, receiveSelection
+```
+
+All payloads are JSON (`JSON.parse` / `JSON.generate` on the Ruby side;
+U+2028/U+2029 are escaped when embedding into `execute_script`).
+
 Do not allow arbitrary Ruby code to be executed from JavaScript.
 
 Never construct Ruby source code from unsanitized user input.
@@ -671,6 +714,25 @@ viewer.focusObject(id);
 viewer.getObject(id);
 
 viewer.clearSelection();
+```
+
+The actual `window.viewer` API (exported by `web/src/viewer/App.vue`) is a
+superset of the example:
+
+```javascript
+viewer.loadModel(url);
+viewer.selectObject(pid);
+viewer.focusObject(pid);
+viewer.getObject(pid);
+viewer.setShowObject(pid, visible);
+viewer.clearSelection();
+viewer.toggleEdges();
+viewer.fit();
+viewer.reset();
+viewer.on(event, callback);  // loadStart, progress, viewerReady, loadError,
+                             // objectSelected, selectionCleared,
+                             // objectVisibilityChanged, wireframe, edges
+viewer.selectedPid;          // getter
 ```
 
 The viewer should communicate through events rather than tightly coupling UI components to Three.js internals.
@@ -958,6 +1020,11 @@ The distributed RBZ is packaged from the extension folder with
 `ruby build/package.rb` and must not require npm; `package.rb` refuses
 to run when the built bundles are missing.
 
+Releases: `.github/workflows/release.yml` runs on a `v*` tag, executes
+`ruby build/package.rb` (no npm step — the committed bundles are used) and
+attaches `build/dn1sup_export_3d.rbz` to a GitHub Release. Store publishing
+rules are documented in PUBLISHING.md.
+
 ---
 
 # 33. Dependencies
@@ -1034,9 +1101,19 @@ Example:
 1.0.0
 ```
 
-Keep the version in one authoritative location.
+The authoritative version source is `dn1sup_export_3d/version.rb`
+(`Dn1supExport3d::VERSION`).
 
-Do not duplicate manually maintained version strings throughout the project.
+Two mirrors must be bumped in the same commit and must always carry the
+same value:
+
+- `registry.json` — the Extension Store card; the store reads its
+  `version` when checking for updates;
+- `web/package.json` — dev-only npm metadata (not distributed).
+
+`build/package.rb` verifies that both mirrors match `VERSION` and aborts
+on mismatch, so the release CI fails instead of shipping a desynchronized
+store card.
 
 ---
 
