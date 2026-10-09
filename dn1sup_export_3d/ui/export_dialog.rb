@@ -26,15 +26,16 @@ module Dn1supExport3d
       @message = nil
       @stats = nil
       @web_dir = nil
+      @single_file_path = nil
     end
 
     # Returns the HtmlDialog (nil return would make programmatic use awkward).
     def show
       @dialog = UI::HtmlDialog.new(
-        dialog_title: "Export to GLB",
+        dialog_title: "Экспорт в GLB — Web 3D Export",
         preferences_key: "dn1sup_export_3d",
-        width: 500,
-        height: 430,
+        width: 520,
+        height: 500,
         resizable: false
       )
       register_callbacks
@@ -63,6 +64,7 @@ module Dn1supExport3d
         message: @message,
         stats: @stats,
         web_dir_name: @web_dir && File.basename(@web_dir),
+        single_file_name: @single_file_path && File.basename(@single_file_path),
         selection_count: model ? model.selection.count : 0
       }
       state[:default_path] = default_path if default_path
@@ -122,15 +124,19 @@ module Dn1supExport3d
       @mode = "exporting"
       @message = "Exporting\u2026"
       @stats = nil
+      @single_file_path = nil
       push_state
-      UI.start_timer(0.05, false) { run_export(model, scope, path, !!options["include_hidden"]) }
+      UI.start_timer(0.05, false) do
+        run_export(model, scope, path, !!options["include_hidden"], !!options["single_file"])
+      end
     end
 
-    def run_export(model, scope, path, include_hidden)
+    def run_export(model, scope, path, include_hidden, single_file)
       exporter = Exporter::GLBExporter.new(model: model, scope: scope, include_hidden: include_hidden)
       stats = exporter.export(path)
-      web_dir = build_web_package(path)
+      web_dir = build_web_package(path, single_file: single_file)
       @web_dir = web_dir
+      @single_file_path = single_file ? Dn1supExport3d.single_file_path(path) : nil
       @mode = "done"
       @message = nil
       @stats = stats
@@ -173,8 +179,8 @@ module Dn1supExport3d
     end
 
     # Defined in main.rb; reachable through the enclosing namespace.
-    def build_web_package(glb_path)
-      Dn1supExport3d.build_web_package(glb_path)
+    def build_web_package(glb_path, single_file: false)
+      Dn1supExport3d.build_web_package(glb_path, single_file: single_file)
     end
   end
 end

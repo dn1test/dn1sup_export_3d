@@ -2,22 +2,24 @@
 
 SketchUp 2026 extension that exports models (or the current selection) to
 **glTF 2.0 / GLB** and views the result interactively with **Three.js** —
-in a browser, or right inside SketchUp in an `UI::HtmlDialog`.
+in a browser, or right inside SketchUp in an `UI::HtmlDialog`. Both GUIs
+(the export dialog and the 3D viewer) are built with **Vue 3 + Tailwind CSS**.
 
 ```
 SketchUp 2026 (Ruby API)
         │  dn1sup_export_3d (this extension)
         ▼
-     model.glb  +  <name>_web3d/ package
+     model.glb  +  <name>_web3d/ package  +  <name>.html (single file)
         │
         ▼
-Three.js viewer  (browser / HtmlDialog / any website)
+Three.js viewer  (browser / HtmlDialog / any website / e-mail to a customer)
 ```
 
 ## Install
 
 - **From RBZ**: SketchUp → Extension Manager → Install Extension →
-  `build/dn1sup_export_3d.rbz` (build it with `ruby build/package.rb`).
+  `build/dn1sup_export_3d.rbz` (build it with `ruby build/package.rb`; the
+  archive ships pre-built UI assets, Node.js is only needed for development).
 - **From source**: copy `dn1sup_export_3d.rb` and `dn1sup_export_3d/` into
   your SketchUp `Plugins` folder (both must sit side by side, exactly as in
   this repository).
@@ -31,20 +33,25 @@ After installation, the menu **Extensions → Web 3D Export** appears with:
 
 ### Export dialog
 
-The dialog collects everything Phase 9 of AGENTS.md calls for:
+The dialog (Russian UI, 520×500) collects:
 
-- **What to export** — entire model or the current selection (the selection
-  radio shows the live object count);
-- **Output file** — path field plus a Browse… save panel (defaults next to
-  the model file; `.glb` is appended automatically);
-- **Include hidden geometry** — off by default, matching the exporter's
+- **Что экспортировать** — radio cards: the entire model or the current
+  selection (the selection card shows the live object count and is disabled
+  while the selection is empty);
+- **Куда сохранить** — path field plus an «Обзор…» save panel (defaults next
+  to the model file; `.glb` is appended automatically);
+- **Включая скрытую геометрию** — off by default, matching the exporter's
   visibility rules;
-- **Feedback** — an indeterminate "Exporting…" state while SketchUp is busy
+- **Также создать один HTML-файл со встроенной моделью** — on by default:
+  next to the web package a single `<name>.html` is written with the viewer
+  and the model (base64) inlined; a customer can open it by double-click,
+  no hosting needed;
+- **Feedback** — an indeterminate «Экспорт…» state while SketchUp is busy
   (the export runs synchronously on the UI thread; SketchUp is not
   thread-safe), then a result panel with faces/triangles/materials/textures,
   file size and elapsed time;
-- **Post-export actions** — *Open 3D viewer* (the HtmlDialog viewer) and
-  *Open folder* (the web package directory).
+- **Post-export actions** — «Открыть 3D-просмотр» (the HtmlDialog viewer)
+  and «Открыть папку» (the web package directory).
 
 Errors (bad path, empty selection, export failures) are reported inside the
 dialog, not by crashing. The dialog uses the same bridge as the viewer:
@@ -59,13 +66,16 @@ self-contained web package to `<name>_web3d/`:
 <name>_web3d/
 ├── model.glb        # the exported model
 ├── index.html
-├── viewer.js
-├── viewer.css
-└── vendor/three/    # vendored Three.js, no CDN needed
+├── README.txt       # how to view / what to send (Russian)
+└── assets/
+    └── viewer.js    # the whole viewer (Vue + Three.js) as one classic script
+<name>.html          # optional single file: viewer + model, double-clickable
 ```
 
-Upload that folder anywhere (or open `index.html` locally in a browser);
-the same GLB loads without SketchUp.
+Upload that folder anywhere — or send the single `<name>.html`; the same
+GLB loads without SketchUp. (Browsers forbid `file://` pages from fetching
+neighboring files, so the folder variant needs hosting or SketchUp; the
+single-file variant embeds the model as a data URI and works anywhere.)
 
 ## Exporter
 
@@ -136,40 +146,56 @@ applied. The export never modifies the model (verified by a test).
 
 ## Viewer
 
-`viewer.js` exposes a small API (`window.viewer`, AGENTS.md §22):
+The viewer is a Vue 3 app (`web/src/viewer/`) over a framework-agnostic
+Three.js engine (`ViewerEngine.js`). Layout: a header with the model name
+and actions, a side panel with «Объекты» (search + object tree + per-object
+visibility) and «Свойства» (selected object: name, type, persistent_id,
+layer) tabs, a status bar with object/triangle counts and a mouse hint, and
+full-screen overlays for loading (with progress), load errors (with a
+double-click hint when opened as a local file) and help.
+
+The scene uses a fixed studio setup on a white background: a
+`RoomEnvironment` IBL for soft fill (neutral tone mapping keeps material
+colors close to SketchUp), a frontal key light and a back rim light; both
+cast shadows onto an invisible `ShadowMaterial` floor, so a soft shadow
+puddle stays visible under the model from any angle. The light rig and
+shadow frustum are re-fitted to the model bounds on every load.
+
+`window.viewer` exposes a small API (AGENTS.md §22):
 
 ```js
-viewer.loadModel(url);      // load a GLB
+viewer.loadModel(url);      // load a GLB (http(s) or data: URI)
 viewer.selectObject(pid);   // highlight by SketchUp persistent_id -> bool
 viewer.focusObject(pid);    // move camera to the object -> bool
 viewer.getObject(pid);      // extras.sketchup metadata or null
 viewer.setShowObject(pid, visible); // viewer-side show/hide -> bool
 viewer.clearSelection();
 viewer.fit(); viewer.reset();
-viewer.on("viewerReady", cb);            // {url, objects, triangles}
-viewer.on("objectSelected", cb);         // extras.sketchup of the clicked object
+viewer.on("viewerReady", cb);             // {url, objects, triangles}
+viewer.on("objectSelected", cb);          // {pid, extras, chain|null}
 viewer.on("selectionCleared", cb);
-viewer.on("objectVisibilityChanged", cb);// {pid, visible}
-viewer.on("loadError", cb);              // {url, error}
+viewer.on("objectVisibilityChanged", cb); // {pid, visible}
+viewer.on("loadError", cb);               // {url, error}
+viewer.on("loadStart" / "progress" / "wireframe", cb); // extra events
 ```
 
-### Object tree
+### Interaction
 
-The left panel lists the exported object hierarchy (groups, component
-instances and definitions, from the glTF node extras):
-
-- **click** a row to select the object in 3D (and in SketchUp, via the
-  bridge); the 3D click syncs back into the tree;
+- **click** in 3D or in the tree selects the object (and syncs into SketchUp
+  via the bridge); a 3D click switches the panel to «Свойства»;
 - **double-click** focuses the camera on the object;
 - the **eye** toggles viewer-side visibility of the object (hidden objects
-  are also excluded from picking);
-- the **filter box** matches names/pids, showing matching rows and their
-- ancestors; the ☰ button collapses the panel.
+  are also excluded from picking; hidden rows are struck through);
+- the **filter box** matches names/types, showing matching rows and their
+  ancestors; the ☰ button collapses the panel;
+- header actions: fit (**F**), reset camera (**R**), wireframe (**W**),
+  PNG screenshot, fullscreen, help (**?**); **Esc** clears the selection or
+  closes overlays.
 
 Clicks raycast meshes (metadata is inherited from the owning node chain),
 highlight via per-mesh material clones (instances share materials), and all
-panels use `textContent` only — model metadata is never injected as HTML.
-Works both in a plain browser and inside the HtmlDialog.
+model data is rendered as text — never injected as HTML. Works both in a
+plain browser and inside the HtmlDialog.
 
 ## Toolbar
 
@@ -183,7 +209,7 @@ Attached in `main.rb` before `dialog.show`; JS calls Ruby through the
 `window.sketchup` object that HtmlDialog injects (absent in normal browsers,
 which doubles as feature detection):
 
-| JS (viewer.js) | Ruby callback | Effect |
+| JS (viewer) | Ruby callback | Effect |
 |---|---|---|
 | `sketchup.viewer_ready(<n>)` | `viewer_ready` | logs that the viewer is up |
 | `sketchup.object_selected(<pid>, …)` | `object_selected` | receives the clicked object's pid chain (part first, its component instance last) and selects the first pid that exists as an entity in the model |
@@ -195,22 +221,50 @@ retained by the module (an unreferenced HtmlDialog can be garbage-collected).
 
 ## Development
 
+The GUI sources live in `web/` (Vue 3 + Tailwind CSS 4 + Vite + npm
+`three`); the built assets are committed so that the RBZ can be packaged
+without Node:
+
 ```
 dn1sup_export_3d.rb          # registrar (sits next to the folder, like in Plugins)
 dn1sup_export_3d/
-├── main.rb                  # menus, export flow, HtmlDialog bridge
-├── ui/                      # export dialog (export_dialog.html/css/js + class)
+├── main.rb                  # menus, export flow, web package, HtmlDialog bridge
+├── ui/                      # export dialog: export_dialog.rb + built
+│                            # export_dialog.html + assets/ (built from web/)
 ├── version.rb               # single source of the version
 ├── logger.rb
 ├── exporter/                # coordinate.rb, buffer.rb, geometry.rb,
 │                            # materials.rb, glb_exporter.rb
-├── viewer/                  # index.html, viewer.js, viewer.css
-└── vendor/                  # vendored Three.js ES modules (MIT), no CDN
-    ├── three/               # three.module.min.js, GLTFLoader.js, OrbitControls.js
-    └── utils/               # BufferGeometryUtils.js (imported by GLTFLoader)
+└── viewer/                  # built viewer: index.html + assets/viewer.js
+web/                         # GUI sources (dev-only, not packaged)
+├── src/viewer/              # App.vue, engine/ViewerEngine.js, components/
+├── src/dialog/              # export dialog app
+├── src/shared/              # bridge.js, plural.js, format.js
+├── index.html, export_dialog.html            # Vite entries
+├── vite.viewer.config.mjs, vite.dialog.config.mjs
+└── scripts/                 # build helpers (classic <script> tag plugin)
 test/                        # test suite (dev-only, not packaged)
 build/                       # check_glb.rb, package.rb (dev-only)
 ```
+
+Both Vite builds target `es2017` and emit a single **IIFE** chunk per app
+(the small `classicScriptTag` plugin rewrites Vite's `<script type=module>`
+tag), so the result is a plain classic script: it runs in the HtmlDialog and
+by double-clicking `index.html` on `file://`, where Chrome blocks ES
+modules. CSS is inlined into the JS bundle by Vite for IIFE output.
+
+To work on the GUI:
+
+```
+cd web
+npm install
+npm run dev:viewer     # or dev:dialog
+npm run build          # writes dn1sup_export_3d/viewer/ and dn1sup_export_3d/ui/
+```
+
+`build_single_file_html` (main.rb) inlines the built viewer and the GLB
+(base64 `window.__VIEWER_BOOT.model`) into the single-file HTML at export
+time — pure Ruby, no Node on the user's machine.
 
 Note on layout: the registrar lives at the repository root rather than in
 `src/` so that repository layout == RBZ layout == installed Plugins layout
@@ -253,5 +307,6 @@ ruby build/package.rb     # -> build/dn1sup_export_3d.rbz (uses bsdtar, no gems)
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Bundled Three.js modules keep their
-[MIT notice](dn1sup_export_3d/vendor/three/LICENSE).
+MIT — see [LICENSE](LICENSE). Three.js and its examples (GLTFLoader,
+OrbitControls) are npm dependencies of the `web/` build and keep their MIT
+notice.

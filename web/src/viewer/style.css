@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  /* Белый - в цвет сцены, чтобы не было тёмной вспышки до загрузки бандла. */
+  background: #ffffff;
+  color: #e4e4e7;
+  font-family: system-ui, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+/* Тонкий скроллбар для панели объектов */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #4b4d55 transparent;
+}
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: #4b4d55;
+  border-radius: 4px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

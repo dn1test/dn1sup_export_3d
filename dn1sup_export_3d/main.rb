@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "base64"
 require "fileutils"
 require_relative "version"
 require_relative "logger"
@@ -132,23 +133,75 @@ module Dn1supExport3d
 
   # --------------------------------------------------------- web package
 
-  # Copies the GLB plus viewer assets next to it so the package can be
+  # Copies the GLB plus the built viewer next to it so the package can be
   # uploaded as-is (AGENTS.md #23): <name>_web3d/{model.glb, index.html,
-  # viewer.js, viewer.css, vendor/three/*}.
-  def self.build_web_package(glb_path)
+  # README.txt, assets/}. With single_file: true it also writes
+  # <name>.html next to the folder - one self-contained file (viewer plus
+  # the model as base64) that a customer can open by double-click.
+  def self.build_web_package(glb_path, single_file: false)
     base = File.basename(glb_path, ".glb")
     web_dir = File.join(File.dirname(glb_path), "#{base}_web3d")
     FileUtils.mkdir_p(web_dir)
     FileUtils.cp(glb_path, File.join(web_dir, "model.glb"))
     src = File.join(__dir__, "viewer")
-    %w[index.html viewer.js viewer.css].each do |file|
-      FileUtils.cp(File.join(src, file), web_dir)
-    end
-    # vendor/ is copied as a whole tree (three/ ES modules + utils/ that
-    # GLTFLoader.js imports from).
-    FileUtils.rm_rf(File.join(web_dir, "vendor"))
-    FileUtils.cp_r(File.join(__dir__, "vendor"), web_dir)
+    FileUtils.cp(File.join(src, "index.html"), File.join(web_dir, "index.html"))
+    # Layouts from older exports must not survive a re-export.
+    %w[viewer.js viewer.css vendor].each { |stale| FileUtils.rm_rf(File.join(web_dir, stale)) }
+    assets = File.join(src, "assets")
+    FileUtils.rm_rf(File.join(web_dir, "assets"))
+    FileUtils.cp_r(assets, web_dir) if File.directory?(assets)
+    File.write(
+      File.join(web_dir, "README.txt"),
+      web_package_readme(base),
+      encoding: "UTF-8"
+    )
+    build_single_file_html(glb_path) if single_file
     web_dir
+  end
+
+  # Path of the self-contained HTML file (next to the GLB).
+  def self.single_file_path(glb_path)
+    File.join(File.dirname(glb_path), "#{File.basename(glb_path, ".glb")}.html")
+  end
+
+  # Inlines the built viewer (Vite embeds css into the js for IIFE builds,
+  # but a separate stylesheet is handled too) and the GLB itself (base64
+  # data URI) into one HTML file. The engine reads
+  # window.__VIEWER_BOOT.model, so the file works even over file://, where
+  # browsers forbid fetching neighboring files.
+  def self.build_single_file_html(glb_path)
+    src = File.join(__dir__, "viewer")
+    assets = File.join(src, "assets")
+    html = File.read(File.join(src, "index.html"))
+    html = html.gsub(%r{<script\b[^>]*src="\./assets/[^"]+"[^>]*>\s*</script>}) do |tag|
+      js = File.read(File.join(assets, File.basename(tag[/src="([^"]+)"/, 1])))
+      # A literal "</script>" inside the code would close the element.
+      "<script>#{js.gsub('</script') { '<\/script' }}</script>"
+    end
+    html = html.gsub(%r{<link\b[^>]*href="\./assets/[^"]+"[^>]*>}) do |tag|
+      css = File.read(File.join(assets, File.basename(tag[/href="([^"]+)"/, 1])))
+      "<style>#{css}</style>"
+    end
+    b64 = Base64.strict_encode64(File.binread(glb_path))
+    boot = "<script>window.__VIEWER_BOOT={model:'data:model/gltf-binary;base64,#{b64}'," \
+           "name:#{JSON.generate(File.basename(glb_path))}};</script>"
+    html = html.sub(/<head>/i, "<head>\n#{boot}")
+    File.binwrite(single_file_path(glb_path), html)
+    single_file_path(glb_path)
+  end
+
+  def self.web_package_readme(base)
+    <<~TEXT
+      Просмотр 3D-модели
+      ==================
+
+      Эта папка предназначена для размещения на веб-хостинге (точка входа -
+      index.html) или для просмотра из SketchUp (расширение Web 3D Export).
+
+      Чтобы отправить модель заказчику одним файлом, используйте файл
+      #{base}.html рядом с папкой: модель встроена в него, и он открывается
+      двойным кликом в любом современном браузере.
+    TEXT
   end
 end
 
