@@ -3,3 +3,6 @@
 
 # Staging dir of build/package.rb
 build/rbz_staging/
+
+# RBZ output of build/package.rb — CI builds a fresh one per release tag
+build/*.rbz

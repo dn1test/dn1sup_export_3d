@@ -266,7 +266,8 @@ dn1sup_export_3d/
 ├── main.rb                  # menus, export flow, web package, HtmlDialog bridge
 ├── ui/                      # export dialog: export_dialog.rb + built
 │                            # export_dialog.html + assets/ (built from web/)
-├── version.rb               # single source of the version
+├── version.rb               # version source; mirrors: registry.json and
+│                            # web/package.json (enforced by build/package.rb)
 ├── logger.rb
 ├── exporter/                # coordinate.rb, buffer.rb, geometry.rb,
 │                            # materials.rb, glb_exporter.rb
@@ -329,7 +330,8 @@ are built inside an undo operation that is always aborted, so the user's
 model is never touched. Open the Ruby console and run:
 
 ```ruby
-load "U:/dn1code/sketchup_ext/dn1sup_export_3d/dn1sup_export_3d/test/run_all.rb"
+# replace with the path to your repository checkout
+load "U:/path/to/dn1sup_export_3d/dn1sup_export_3d/test/run_all.rb"
 ```
 
 `run_all.rb` force-reloads the extension code, so it always exercises the
