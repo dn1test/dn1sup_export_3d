@@ -23,13 +23,18 @@ module Dn1supExport3d
     #   (0.9 / 0.0) are used instead of invented PBR values.
     # - PNG/JPEG sources are embedded as-is; any other format (and sources
     #   that only live inside the .skp) are re-exported as PNG via
-    #   Texture#write; if that fails the material falls back to solid color.
+    #   Texture#write; if that fails the material falls back to solid color
+    #   (reported via the shared warnings list and the Logger).
+    # - embed_textures: false (lightweight preview mode) drops texture images
+    #   deliberately: materials keep their base color factor.
     class MaterialConverter
       SUPPORTED_MIME = { ".png" => "image/png", ".jpg" => "image/jpeg", ".jpeg" => "image/jpeg" }.freeze
       WRAP_REPEAT = 10_497
 
-      def initialize(buffer:)
+      def initialize(buffer:, warnings: nil, embed_textures: true)
         @buffer = buffer
+        @warnings = warnings
+        @embed_textures = embed_textures
         @cache = {}
         @list = []
         @image_cache = {}
@@ -65,13 +70,21 @@ module Dn1supExport3d
 
       private
 
+      # Adds a user-facing warning to the exporter's shared list (the dialog
+      # shows it after the export) unless no collector was given.
+      def warn_user(message)
+        @warnings << message if @warnings
+      end
+
       def build(material)
         r, g, b = material.color.to_a
         # Material#alpha is a 0.0..1.0 float in SketchUp 2026 (verified live);
         # Color#to_a always reports alpha 255, so it cannot be used here.
         alpha = material.alpha.to_f.clamp(0.0, 1.0)
         pbr = { "roughnessFactor" => 0.9, "metallicFactor" => 0.0 }
-        texture_index = material.texture ? embed_texture(material.texture) : nil
+        # embed_textures: false (preview mode) intentionally loses the image;
+        # the textured material degrades to its base color without a warning.
+        texture_index = material.texture && @embed_textures ? embed_texture(material.texture) : nil
         if texture_index
           pbr["baseColorTexture"] = { "index" => texture_index }
           pbr["baseColorFactor"] = [1.0, 1.0, 1.0, alpha]
@@ -90,6 +103,7 @@ module Dn1supExport3d
         bytes, mime = texture_bytes(texture)
         unless bytes
           Logger.warn("Texture '#{texture.filename}': cannot obtain image data, falling back to solid color")
+          warn_user("Текстура «#{texture.filename}» недоступна, материал показан сплошным цветом")
           return nil
         end
 

@@ -62,7 +62,7 @@ module Dn1supTest
   # afterwards, leaving the user's model untouched. Pre-existing model content
   # is cleared inside the operation so tests run against a known scene.
   # Returns the parsed GLB.
-  def self.export_scene(name, scope: :all, include_hidden: false, path: nil)
+  def self.export_scene(name, scope: :all, include_hidden: false, path: nil, embed_textures: true)
     model = Sketchup.active_model
     raise TestFailure, "no active model" unless model
     model.start_operation("dn1sup_export_3d test: #{name}", true)
@@ -72,7 +72,7 @@ module Dn1supTest
       path ||= File.join(Dir.tmpdir, "dn1sup_export_3d_tests", "#{name}.glb")
       FileUtils.mkdir_p(File.dirname(path))
       @last_stats = Dn1supExport3d::Exporter::GLBExporter.new(
-        model: model, scope: scope, include_hidden: include_hidden
+        model: model, scope: scope, include_hidden: include_hidden, embed_textures: embed_textures
       ).export(path)
     ensure
       model.abort_operation

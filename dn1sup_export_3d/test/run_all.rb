@@ -8,6 +8,7 @@ extension_root = File.expand_path("..", __dir__)
 %w[
   version.rb
   logger.rb
+  filename.rb
   exporter/coordinate.rb
   exporter/buffer.rb
   exporter/materials.rb

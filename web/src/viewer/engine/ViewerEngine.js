@@ -74,6 +74,9 @@ export default class ViewerEngine {
 
     this.modelBox = null;
     this.selectedPid = null;
+    // Мультивыборка (синхронизация с выделением SketchUp в диалоге экспорта);
+    // selectedPid остаётся первым выбранным - на нём держится дерево/инфо.
+    this.selectedPids = new Set();
     this.wireframe = false;
     // Контурные линии рёбер включены по умолчанию (вид как в SketchUp).
     this.edgesVisible = true;
@@ -143,7 +146,7 @@ export default class ViewerEngine {
     this.emit("loadStart", { url });
     const loader = new GLTFLoader();
     const finish = (gltf) => {
-      this._setHighlight(null);
+      this._applyHighlight(null);
       // Контры прошлой модели ссылаются на её геометрию - освобождаем кэш.
       this._edgeCache.forEach((geometry) => geometry.dispose());
       this._edgeCache.clear();
@@ -249,30 +252,37 @@ export default class ViewerEngine {
 
   // ------------------------------------------------------------- выбор
 
-  _setHighlight(pid) {
-    const had = this.selectedPid;
+  // Подсветка набора pid. Инстансы делят материалы glTF, поэтому
+  // подсвечиваем клонами per-mesh; повторные меши (пересечение pid) один.
+  _applyHighlight(pids) {
+    const had = this.selectedPids.size > 0;
     this.originalMaterials.forEach((material, mesh) => {
       mesh.material = material;
     });
     this.originalMaterials.clear();
+    this.selectedPids = new Set();
     this.selectedPid = null;
-    if (pid === null || pid === undefined) {
+    if (!pids || pids.length === 0) {
       if (had) this.emit("selectionCleared");
       return;
     }
-    const meshes = this.meshesByPid.get(String(pid)) || [];
-    // Инстансы делят материалы glTF, поэтому подсвечиваем клонами per-mesh.
-    meshes.forEach((mesh) => {
-      if (!mesh.material) return;
-      this.originalMaterials.set(mesh, mesh.material);
-      const highlight = mesh.material.clone();
-      if (highlight.emissive) {
-        highlight.emissive = new THREE.Color(0x3355aa);
-        highlight.emissiveIntensity = 0.6;
-      }
-      mesh.material = highlight;
+    const seen = new Set();
+    pids.forEach((pid) => {
+      const key = String(pid);
+      (this.meshesByPid.get(key) || []).forEach((mesh) => {
+        if (seen.has(mesh) || !mesh.material) return;
+        seen.add(mesh);
+        this.originalMaterials.set(mesh, mesh.material);
+        const highlight = mesh.material.clone();
+        if (highlight.emissive) {
+          highlight.emissive = new THREE.Color(0x3355aa);
+          highlight.emissiveIntensity = 0.6;
+        }
+        mesh.material = highlight;
+      });
+      if (this.meshesByPid.has(key)) this.selectedPids.add(key);
     });
-    if (meshes.length) this.selectedPid = String(pid);
+    this.selectedPid = this.selectedPids.values().next().value || null;
   }
 
   getObject(pid) {
@@ -285,13 +295,22 @@ export default class ViewerEngine {
   // _pickAt - он несёт цепочку pid для Ruby.
   selectObject(pid) {
     if (!this.meshesByPid.has(String(pid))) return false;
-    this._setHighlight(pid);
+    this._applyHighlight([pid]);
     this.emit("objectSelected", { pid: String(pid), extras: this.getObject(pid), chain: null });
     return true;
   }
 
+  // Мультивыборка извне (выделение SketchUp в диалоге экспорта). Нарочно не
+  // эмитит objectSelected: это событие про клик пользователя, а обратное
+  // событие превратило бы синхронизацию в петлю Ruby -> JS -> Ruby.
+  setSelection(pids) {
+    const list = (pids || []).map(String).filter((pid) => this.meshesByPid.has(pid));
+    this._applyHighlight(list);
+    return this.selectedPids.size;
+  }
+
   clearSelection() {
-    this._setHighlight(null);
+    this._applyHighlight(null);
   }
 
   focusObject(pid) {
@@ -496,7 +515,7 @@ export default class ViewerEngine {
     // цепочку: он выберет первый pid, существующий как entity в модели.
     const outermost = chain[chain.length - 1];
     const chainPids = chain.map((sketchup) => String(sketchup.persistent_id));
-    this._setHighlight(outermost.persistent_id);
+    this._applyHighlight([outermost.persistent_id]);
     this.emit("objectSelected", {
       pid: String(outermost.persistent_id),
       extras: this.getObject(outermost.persistent_id),

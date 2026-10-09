@@ -5,6 +5,7 @@ require "base64"
 require "fileutils"
 require_relative "version"
 require_relative "logger"
+require_relative "filename"
 require_relative "exporter/glb_exporter"
 require_relative "ui/export_dialog"
 
@@ -38,7 +39,7 @@ module Dn1supExport3d
     if scope == :selection && model.selection.empty?
       return UI.messagebox("Selection is empty. Select objects to export first.")
     end
-    default_name = model.title.to_s.empty? ? "model" : model.title
+    default_name = Filename.sanitize(model.title)
     dir = model.path.to_s.empty? ? Dir.home : File.dirname(model.path)
     path = UI.savepanel("Export GLB", dir, "#{default_name}.glb")
     return unless path

@@ -27,6 +27,17 @@ module Dn1supExport3d
     # entities on hidden tags/layers are skipped at every level unless
     # include_hidden: true is set (export dialog option). Page-specific
     # visibility overrides and "hide rest of model" are not applied.
+    #
+    # The export can run stepwise so a UI can drive it from a timer and stay
+    # responsive (progress + cancellation, AGENTS.md #26):
+    #
+    #   exporter.begin_export
+    #   exporter.step(0.15) until exporter.done?
+    #   glb_binary = exporter.finish
+    #
+    # #export(path) is the one-call equivalent and produces byte-identical
+    # output. Root containers deleted between steps (the user may edit the
+    # model mid-export) are skipped via Entity#valid?.
     class GLBExporter
       MAGIC = 0x46546C67        # "glTF"
       GLB_VERSION = 2
@@ -35,38 +46,107 @@ module Dn1supExport3d
 
       SCOPES = [:all, :selection].freeze
 
-      def initialize(model:, scope: :all, include_hidden: false)
+      # User-facing warnings collected during the export (texture failures,
+      # circular component references); also mirrored to the Logger.
+      attr_reader :warnings
+
+      def initialize(model:, scope: :all, include_hidden: false, embed_textures: true)
         unless SCOPES.include?(scope)
           raise ArgumentError, "Unknown scope #{scope.inspect} (expected one of #{SCOPES.join(', ')})"
         end
         @model = model
         @scope = scope
         @include_hidden = include_hidden
+        @embed_textures = embed_textures
+        @warnings = []
       end
 
-      # Returns a stats hash (path, faces, triangles, meshes, materials,
-      # textures, bytes, seconds) describing the written file.
-      def export(path)
-        started = Time.now
-        @materials = MaterialConverter.new(buffer: @buffer = GLBBuffer.new)
+      # Phase 1: snapshot the scope and prepare the shared caches. Root faces
+      # are meshed immediately (they have no progress weight of their own);
+      # root containers go into the step queue.
+      def begin_export
+        @started = Time.now
+        @materials = MaterialConverter.new(
+          buffer: @buffer = GLBBuffer.new,
+          warnings: @warnings,
+          embed_textures: @embed_textures
+        )
         @meshes = []
         @definition_templates = {}
         @definition_stack = []
+        @root_children = []
 
-        root = build_root_node
-        gltf = assemble_gltf(root)
-        write_glb(path, gltf)
+        roots = @scope == :selection ? @model.selection.to_a : @model.entities.to_a
+        @root_mesh = MeshData.new(@materials)
+        roots.each { |e| @root_mesh.add_face(e) if e.is_a?(Sketchup::Face) && visible?(e) }
+        @pending = roots.select { |e| e.is_a?(Sketchup::Group) || e.is_a?(Sketchup::ComponentInstance) }
+        @total_containers = @pending.size
+        @current_name = nil
+        nil
+      end
 
-        stats = {
-          path: path,
+      # Phase 2: processes pending root containers for up to `seconds` of wall
+      # time (always at least one, so step(0) advances by a single container).
+      # Returns true when the queue is drained.
+      def step(seconds = 0.15)
+        deadline = Time.now + seconds
+        until @pending.empty?
+          entity = @pending.shift
+          if entity.valid? && visible?(entity)
+            @current_name = display_name(entity)
+            node = entity_node(entity)
+            @root_children << node if node
+          end
+          break if Time.now >= deadline
+        end
+        @current_name = nil if @pending.empty?
+        done?
+      end
+
+      def done?
+        @pending.empty?
+      end
+
+      # {done:, total:, current:} for progress reporting; current is the
+      # display name of the container being processed (or nil between steps).
+      def progress
+        { done: @total_containers - @pending.size, total: @total_containers, current: @current_name }
+      end
+
+      # Phase 3: assembles the glTF scene and returns the GLB binary. The
+      # caller writes it where it is needed (file, in-memory preview, ...).
+      def finish
+        root = { "name" => root_name }
+        root["mesh"] = register_mesh(@root_mesh) unless @root_mesh.empty?
+        root["children"] = @root_children unless @root_children.empty?
+        glb_string(assemble_gltf(root))
+      end
+
+      def elapsed
+        (Time.now - @started).round(2)
+      end
+
+      # Geometry/material counters of the finished export (valid after #finish).
+      def summary
+        {
           faces: @meshes.sum(&:face_count),
           triangles: @meshes.sum(&:triangle_count),
           meshes: @meshes.size,
           materials: @materials.to_a.size,
-          textures: @materials.images.size,
-          bytes: File.size(path),
-          seconds: (Time.now - started).round(2)
+          textures: @materials.images.size
         }
+      end
+
+      # One-call export. Returns a stats hash (path, faces, triangles, meshes,
+      # materials, textures, bytes, seconds) describing the written file.
+      def export(path)
+        begin_export
+        step until done?
+        glb = finish
+        FileUtils.mkdir_p(File.dirname(path))
+        File.binwrite(path, glb)
+
+        stats = build_stats(path, glb)
         Logger.info(
           "Exported #{stats[:faces]} faces (#{stats[:triangles]} triangles, " \
           "#{stats[:meshes]} meshes, #{stats[:materials]} materials, " \
@@ -77,19 +157,8 @@ module Dn1supExport3d
 
       private
 
-      # ------------------------------------------------------------- scenes
-
-      def build_root_node
-        root_entities = @scope == :selection ? @model.selection.to_a : @model.entities.to_a
-
-        root_mesh = MeshData.new(@materials)
-        root_entities.each { |e| root_mesh.add_face(e) if e.is_a?(Sketchup::Face) && visible?(e) }
-
-        root = { "name" => root_name }
-        root["mesh"] = register_mesh(root_mesh) unless root_mesh.empty?
-        children = root_entities.filter_map { |e| entity_node(e) }
-        root["children"] = children unless children.empty?
-        root
+      def build_stats(path, glb)
+        { path: path, **summary, bytes: glb.bytesize, seconds: elapsed }
       end
 
       def root_name
@@ -144,7 +213,7 @@ module Dn1supExport3d
       def metadata(entity)
         {
           "persistent_id" => entity.persistent_id,
-          "entity_type" => entity.class.name.split("::").last,
+          "entity_type" => entity.class.name.split("::").last,   # Group | ComponentInstance | ComponentDefinition
           "name" => entity.name.to_s,
           "layer" => (entity.layer.name.to_s if entity.layer.respond_to?(:name))
         }.compact
@@ -169,6 +238,7 @@ module Dn1supExport3d
         return @definition_templates[pid] if @definition_templates.key?(pid)
         if @definition_stack.include?(pid)
           Logger.warn("Circular component reference at definition '#{definition.name}' (#{pid}); nested instance skipped")
+          @warnings << "Компонент «#{definition.name}»: циклическая ссылка, вложенный экземпляр пропущен"
           return []
         end
 
@@ -253,8 +323,9 @@ module Dn1supExport3d
 
       # -------------------------------------------------------------- GLB
 
-      def write_glb(path, gltf)
-        FileUtils.mkdir_p(File.dirname(path))
+      # GLB container: 12-byte header, JSON chunk (4-byte padded), optional
+      # BIN chunk. The total length field is patched in afterwards.
+      def glb_string(gltf)
         json = JSON.generate(gltf).dup.force_encoding(Encoding::BINARY)
         json += " ".b * ((4 - json.bytesize % 4) % 4)
 
@@ -266,7 +337,7 @@ module Dn1supExport3d
           glb << [bin.bytesize, CHUNK_BIN].pack("VV") << bin
         end
         glb[8, 4] = [glb.bytesize].pack("V")
-        File.binwrite(path, glb)
+        glb
       end
     end
   end

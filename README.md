@@ -33,31 +33,56 @@ After installation, the menu **Extensions → Web 3D Export** appears with:
 
 ### Export dialog
 
-The dialog (Russian UI, 520×500) collects:
+The dialog (Russian UI, 1200×760, resizable) is a two-pane workspace:
 
-- **Что экспортировать** — radio cards: the entire model or the current
-  selection (the selection card shows the live object count and is disabled
-  while the selection is empty);
-- **Куда сохранить** — path field plus an «Обзор…» save panel (defaults next
-  to the model file; `.glb` is appended automatically);
-- **Включая скрытую геометрию** — off by default, matching the exporter's
-  visibility rules;
-- **Также создать один HTML-файл со встроенной моделью** — on by default:
-  next to the web package a single `<name>.html` is written with the viewer
-  and the model (base64) inlined; a customer can open it by double-click,
-  no hosting needed;
-- **Feedback** — an indeterminate «Экспорт…» state while SketchUp is busy
-  (the export runs synchronously on the UI thread; SketchUp is not
-  thread-safe), then a result panel with faces/triangles/materials/textures,
-  file size and elapsed time;
-- **Post-export actions** — «Открыть 3D-просмотр» (the HtmlDialog viewer)
-  and «Открыть папку» (the web package directory).
+- **Left: live 3D preview** — the same Three.js engine as the big viewer,
+  fed by the same exporter in a lightweight mode (textures off by default,
+  toggleable via the «Текстуры» chip). The preview follows the export
+  settings: switch the scope to «Только выделенное» (or change the
+  selection) and it rebuilds automatically. The toolbar has refresh, fit,
+  wireframe and edge-contour buttons; the bottom bar shows object and
+  triangle counts. Building progress is reported in the preview overlay.
+  **Selection is synchronized both ways**: clicking an object in the preview
+  selects it in SketchUp, and SketchUp selection changes highlight in the
+  preview (a `SelectionObserver` pushes the persistent ids while the dialog
+  is open);
+- **Right: settings and feedback**:
+  - **Что экспортировать** — radio cards: the entire model or the current
+    selection (live object count, disabled while the selection is empty);
+  - **Куда сохранить** — folder field plus an «Обзор…» directory picker
+    (defaults to the last used folder, then next to the model file; the
+    choice is remembered between sessions). The file name is not typed:
+    it is derived automatically from the model file name, transliterated
+    to Latin characters (passport scheme: «Кухня-Мечта 2.0» →
+    `Kuhnya-Mechta_2.0.glb`), so the artifacts stay web-safe; the dialog
+    shows the resulting name before export;
+  - **Один HTML-файл со встроенной моделью** — on by default: next to the
+    GLB a single `<name>.html` is written with the viewer and the model
+    (base64) inlined; a customer can open it by double-click, no hosting
+    needed;
+  - **Веб-пакет для сайта** — on by default: the `<name>_web3d/` folder
+    described below;
+  - **Включая скрытую геометрию** — off by default, matching the exporter's
+    visibility rules;
+  - **Progress with cancellation** — the export runs stepwise on a
+    `UI.start_timer` loop (the UI thread stays responsive), with a progress
+    bar, the current stage (Геометрия → Сборка GLB → Веб-пакет → Один
+    HTML-файл), the name of the object being processed and a working
+    «Отмена» button;
+  - **Result panel** — faces/triangles/meshes/materials/textures, GLB size,
+    elapsed time, the produced artifacts (single HTML with its size, web
+    package), exporter warnings (e.g. a texture that fell back to a solid
+    color), and the actions «Открыть 3D-просмотр», «Открыть HTML в браузере»
+    and «Открыть папку».
 
 Errors (bad path, empty selection, export failures) are reported inside the
 dialog, not by crashing. The dialog uses the same bridge as the viewer:
 `window.sketchup.*` for JS → Ruby (`dialog_ready`, `browse_output`,
-`export_start`, `open_viewer`, `open_folder`, `cancel`) and
-`execute_script` for Ruby → JS (`window.exporter.receiveState(...)`).
+`export_start`, `export_cancel`, `preview_refresh`, `preview_object_selected`,
+`open_viewer`, `open_folder`, `open_html`, `close`) and `execute_script` for
+Ruby → JS (`window.exporter.receiveState / receiveProgress /
+receivePreviewStatus / receivePreviewStart / receivePreviewChunk /
+receivePreviewEnd / receiveSelection / setOutputFolder`).
 
 The exporter writes `model.glb` next to the chosen path and copies a
 self-contained web package to `<name>_web3d/`:
@@ -295,9 +320,11 @@ Note on layout: the registrar lives at the repository root rather than in
 
 ### Tests
 
-The suite runs **inside SketchUp** (29 tests: GLB structure, geometry and
+The suite runs **inside SketchUp** (33 tests: GLB structure, geometry and
 transforms, materials/textures/UVs, instancing/metadata, export edge cases
-including the dialog's `include_hidden` option and export stats). Scenes
+including the dialog's `include_hidden` option, export stats, and the
+stepwise export API — byte-identical output, in-memory GLB, progress
+accounting, texture embedding toggle). Scenes
 are built inside an undo operation that is always aborted, so the user's
 model is never touched. Open the Ruby console and run:
 
