@@ -24,7 +24,12 @@ jobs:
       - name: Package RBZ
         run: ruby build/package.rb
 
+      - name: Build release body
+        run: ruby build/release_body.rb
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: build/dn1sup_export_3d.rbz
+          body_path: release_body.md
+          generate_release_notes: true
