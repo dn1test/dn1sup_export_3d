@@ -45,12 +45,19 @@ const activeTab = ref("objects");
 const filterQuery = ref("");
 const helpOpen = ref(false);
 const isFullscreen = ref(false);
+// Настройки вида (вкладка «Вид»): режим отображения, качество подачи
+// материалов и интенсивности света. Значения по умолчанию берутся из
+// движка после его создания.
+const mode = ref("photo");
+const quality = ref("high");
+const lighting = ref({ key: 1, rim: 0.55, fill: 0.3, top: 0.22, env: 0.5, background: 1 });
 
 let engine = null;
 let resizeObserver = null;
 
 onMounted(() => {
   engine = new ViewerEngine(canvasEl.value);
+  ({ mode: mode.value, quality: quality.value, lighting: lighting.value } = engine.getPresentation());
 
   resizeObserver = new ResizeObserver(() => engine.resize());
   resizeObserver.observe(stageEl.value);
@@ -105,6 +112,16 @@ onMounted(() => {
   engine.on("edges", (v) => {
     edges.value = v;
   });
+  // Синхронизация вкладки «Вид»: движок - источник истины, UI отражает.
+  engine.on("mode", (v) => {
+    mode.value = v;
+  });
+  engine.on("quality", (v) => {
+    quality.value = v;
+  });
+  engine.on("lighting", (v) => {
+    lighting.value = v;
+  });
 
   engine.loadModel(modelUrl);
   document.title = `${modelName} — 3D-просмотр`;
@@ -120,6 +137,10 @@ onMounted(() => {
     toggleEdges: () => engine.toggleEdges(),
     fit: () => engine.fit(),
     reset: () => engine.reset(),
+    setMode: (value) => engine.setMode(value),
+    setQuality: (value) => engine.setQuality(value),
+    setLighting: (partial) => engine.setLighting(partial),
+    getPresentation: () => engine.getPresentation(),
     on: (event, cb) => engine.on(event, cb),
     get selectedPid() {
       return engine.selectedPid;
@@ -187,6 +208,24 @@ function togglePanel() {
   panelOpen.value = !panelOpen.value;
 }
 
+// ---------------------------------------------------- настройки вида
+
+function setViewMode(value) {
+  engine.setMode(value);
+}
+
+function setQuality(value) {
+  engine.setQuality(value);
+}
+
+function setLighting(partial) {
+  lighting.value = engine.setLighting(partial);
+}
+
+function resetView() {
+  lighting.value = engine.resetLighting();
+}
+
 async function screenshot() {
   try {
     const blob = await engine.screenshot();
@@ -243,9 +282,16 @@ const singleFileName = (() => {
         :visibility="visibility"
         :selected-pid="selectedPid"
         :selected-extras="selectedExtras"
+        :mode="mode"
+        :quality="quality"
+        :lighting="lighting"
         @select="selectFromTree"
         @toggle-visibility="toggleVisibility"
         @focus="focusSelected"
+        @set-mode="setViewMode"
+        @set-quality="setQuality"
+        @set-lighting="setLighting"
+        @reset-view="resetView"
       />
 
       <main ref="stageEl" class="relative min-w-0 flex-1">

@@ -2,6 +2,7 @@
 import Icon from "./Icon.vue";
 import ObjectTree from "./ObjectTree.vue";
 import InfoPanel from "./InfoPanel.vue";
+import ViewSettings from "./ViewSettings.vue";
 
 defineProps({
   tree: { type: Array, default: () => [] },
@@ -10,9 +11,22 @@ defineProps({
   selectedExtras: { type: Object, default: null },
   activeTab: { type: String, default: "objects" },
   filterQuery: { type: String, default: "" },
+  mode: { type: String, default: "photo" },
+  quality: { type: String, default: "high" },
+  lighting: { type: Object, required: true },
 });
 
-defineEmits(["select", "toggle-visibility", "focus", "update:activeTab", "update:filterQuery"]);
+defineEmits([
+  "select",
+  "toggle-visibility",
+  "focus",
+  "update:activeTab",
+  "update:filterQuery",
+  "set-mode",
+  "set-quality",
+  "set-lighting",
+  "reset-view",
+]);
 </script>
 
 <template>
@@ -37,6 +51,16 @@ defineEmits(["select", "toggle-visibility", "focus", "update:activeTab", "update
         @click="$emit('update:activeTab', 'properties')"
       >
         Свойства
+      </button>
+      <button
+        type="button"
+        class="flex-1 border-b-2 px-3 py-2 text-xs font-medium transition-colors"
+        :class="activeTab === 'view'
+          ? 'border-sky-500 bg-white/5 text-white'
+          : 'border-transparent text-zinc-400 hover:text-zinc-200'"
+        @click="$emit('update:activeTab', 'view')"
+      >
+        Вид
       </button>
     </div>
 
@@ -68,6 +92,16 @@ defineEmits(["select", "toggle-visibility", "focus", "update:activeTab", "update
         v-if="activeTab === 'properties'"
         :extras="selectedExtras"
         @focus="$emit('focus')"
+      />
+      <ViewSettings
+        v-if="activeTab === 'view'"
+        :mode="mode"
+        :quality="quality"
+        :lighting="lighting"
+        @set-mode="$emit('set-mode', $event)"
+        @set-quality="$emit('set-quality', $event)"
+        @set-lighting="$emit('set-lighting', $event)"
+        @reset="$emit('reset-view')"
       />
     </div>
   </aside>

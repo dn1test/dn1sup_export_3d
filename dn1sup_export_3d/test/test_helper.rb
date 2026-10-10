@@ -39,6 +39,11 @@ module Dn1supTest
     @failed.empty?
   end
 
+  # sketchup-dev-mcp (ext_test) завершает прогон вызовом <namespace>::Test.run!.
+  def self.run!
+    report
+  end
+
   # ------------------------------------------------------------- asserts
 
   def self.assert(condition, message = "assertion failed")
@@ -226,4 +231,10 @@ module Dn1supTest
       bounds: [model.bounds.min.to_a.map(&:to_f), model.bounds.max.to_a.map(&:to_f)]
     }
   end
+end
+
+# Харнесс живёт в топ-уровне Dn1supTest (исторически), а ext_test ищет его
+# в неймспейсе расширения - открываем туда же.
+module Dn1supExport3d
+  Test = Dn1supTest
 end

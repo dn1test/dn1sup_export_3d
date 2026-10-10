@@ -217,13 +217,26 @@ viewer.setShowObject(pid, visible); // viewer-side show/hide -> bool
 viewer.clearSelection();
 viewer.toggleEdges();       // contour lines on/off -> bool
 viewer.fit(); viewer.reset();
+viewer.setMode("photo" | "sketch"); // photo studio vs flat SketchUp-like view
+viewer.setQuality("low" | "medium" | "high"); // material finish (photo mode)
+viewer.setLighting({key, rim, fill, top, env, background}); // intensities
+viewer.resetLighting();     // back to studio defaults
+viewer.getPresentation();   // {mode, quality, lighting} snapshot
 viewer.on("viewerReady", cb);             // {url, objects, triangles}
 viewer.on("objectSelected", cb);          // {pid, extras, chain|null}
 viewer.on("selectionCleared", cb);
 viewer.on("objectVisibilityChanged", cb); // {pid, visible}
 viewer.on("loadError", cb);               // {url, error}
 viewer.on("loadStart" / "progress" / "wireframe" / "edges", cb); // extra events
+viewer.on("mode" / "quality" / "lighting", cb); // view settings changes
 ```
+
+The **View** tab in the side panel exposes the same controls: display mode
+(**photo** - the studio rig with highlights and reflections, **sketch** - flat
+albedo faces with contour edges on a white background, like in SketchUp),
+material quality (high applies the name-based finish, low shows flat colors)
+and light intensities. Light and material settings apply in photo mode; in
+sketch mode they are stored and applied when switching back.
 
 ### Interaction
 
