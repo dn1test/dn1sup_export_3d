@@ -3,6 +3,13 @@
 Лог изменений **DN1Sup Export 3D** (`dn1sup_export_3d`).
 Формат версий соответствует правилам `MAJOR.MINOR.PATCH`.
 
+## [0.8.5] — 2026-10-12
+
+- feat: `Dn1supExport3d.unload!` — подготовка к переключателю каналов dev/prod
+  в dn1sup_ext_manager (v0.12.0): выгрузка неймспейса закрывает окно
+  просмотрщика (`close_dialog`) и скрывает тулбар; пункты меню остаются до
+  перезапуска SketchUp (ограничение SketchUp API).
+
 ## [0.8.2] — 2026-10-09
 
 - fix(ci): pick System32 bsdtar explicitly - GNU tar on runners cannot write ZIP

@@ -100,6 +100,22 @@ module Dn1supExport3d
     @dialog = nil
   end
 
+  # Выгрузка неймспейса при переключении канала dev/prod (dn1sup_ext_manager):
+  # закрытие окна просмотрщика, скрытие тулбара. Меню через SketchUp API
+  # не удаляются — пункты старого канала остаются до перезапуска.
+  # @return [Boolean]
+  def self.unload!
+    close_dialog
+    toolbar = @toolbar
+    if toolbar && toolbar.respond_to?(:visible?) && toolbar.visible?
+      toolbar.hide
+    end
+    true
+  rescue StandardError => e
+    warn "[Dn1supExport3d] unload!: #{e.message}"
+    false
+  end
+
   # Selects the first entity of the given pid chain that exists in the model
   # (the viewer reports part pid first, its component instance last).
   def self.select_by_persistent_id(pids)
