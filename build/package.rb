@@ -65,8 +65,7 @@ FileUtils.cp(File.join(root, "#{name}.rb"), staging)
 FileUtils.cp(File.join(root, "LICENSE"), staging)
 FileUtils.cp_r(File.join(root, name), staging)
 FileUtils.rm_rf(File.join(staging, name, "test"))
-# Dev-файлы канала разработки (манифест .sketchup_dev.json и прочие dot-файлы)
-# в прод-архив не попадают: их наличие рядом с кодом включило бы dev-логику.
+# Служебные dot-файлы рабочей копии в прод-архив не попадают.
 Dir.children(File.join(staging, name)).each do |child|
   FileUtils.rm_f(File.join(staging, name, child)) if child.start_with?(".")
 end

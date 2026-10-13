@@ -180,9 +180,7 @@ module Dn1supExport3d
         single_file_bytes: @single_file_path && File.size(@single_file_path),
         model_name: model ? model.title.to_s : "",
         selection_count: model ? model.selection.count : 0,
-        output_name: output_filename,
-        # загружен именно dev-вариант (Plugins/<id>_dev) — бейдж DEV в шапке
-        dev_build: Dn1supExport3d::DEV_BUILD
+        output_name: output_filename
       }
       state[:default_folder] = default_folder if include_default_folder
       execute("window.exporter.receiveState(#{json(state)});")
