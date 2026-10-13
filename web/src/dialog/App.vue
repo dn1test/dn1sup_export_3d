@@ -229,7 +229,14 @@ function closeDialog() {
 
     <aside class="flex w-[370px] shrink-0 flex-col border-l border-zinc-200 bg-zinc-50">
       <header class="border-b border-zinc-200 px-4 py-2.5">
-        <h1 class="text-sm font-semibold text-zinc-800">Экспорт 3D</h1>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm font-semibold text-zinc-800">Экспорт 3D</h1>
+          <span
+            v-if="state.dev_build"
+            class="rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-bold tracking-wide text-amber-700"
+            title="Работает dev-вариант (рабочая копия sketchup-dev-mcp), не релиз"
+          >DEV</span>
+        </div>
         <p class="truncate text-[11px] text-zinc-500">
           {{ state.model_name || "Нет открытой модели" }}
         </p>
