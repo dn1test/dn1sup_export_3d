@@ -120,6 +120,15 @@ module Dn1supExport3d
       @dialog.add_action_callback("open_folder") { open_folder }
       @dialog.add_action_callback("open_html") { open_html }
       @dialog.add_action_callback("close") { @dialog.close }
+      # Кнопка «круг со стрелками» в шапке: сначала локальная папка
+      # (DEV_DIR из MANIFEST), потом GitHub — ставится свежайшее.
+      @dialog.add_action_callback("check_update") do
+        if defined?(Dn1sup::Updater)
+          Dn1sup::Updater.check_local_first!(Dn1supExport3d::MANIFEST.merge(force: true, async: true))
+        else
+          UI.openURL(Dn1supExport3d::PAGE_URL)
+        end
+      end
       # Heartbeat reply (see start_heartbeat): only the arrival time and the
       # fact itself matter, there is no payload.
       @dialog.add_action_callback("pong") do |_ctx, _payload|

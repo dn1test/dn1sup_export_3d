@@ -231,6 +231,18 @@ function closeDialog() {
       <header class="border-b border-zinc-200 px-4 py-2.5">
         <div class="flex items-center gap-2">
           <h1 class="text-sm font-semibold text-zinc-800">Экспорт 3D</h1>
+          <button
+            type="button"
+            title="Проверить обновление: сначала локальная папка разработки, потом GitHub"
+            aria-label="Проверить обновление"
+            class="rounded-full p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-sky-600"
+            @click="callSketchUp('check_update')"
+          >
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+            </svg>
+          </button>
         </div>
         <p class="truncate text-[11px] text-zinc-500">
           {{ state.model_name || "Нет открытой модели" }}

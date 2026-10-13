@@ -9,9 +9,28 @@ require_relative "filename"
 require_relative "exporter/glb_exporter"
 require_relative "ui/export_dialog"
 
+# Общий модуль автообновления (shared/dn1sup_updater.rb, пакуется в .rbz
+# как dn1sup_export_3d/dn1sup_updater.rb); в dev-копии его нет.
+if defined?(Sketchup) && Sketchup.respond_to?(:require)
+  begin
+    Sketchup.require "dn1sup_export_3d/dn1sup_updater"
+  rescue LoadError, StandardError
+    nil
+  end
+end
+
 module Dn1supExport3d
   MENU_TITLE = "Web 3D Export"
   ICONS_DIR = File.join(__dir__, "icons")
+
+  ID       = "dn1sup_export_3d".freeze
+  REPO     = "dn1test/dn1sup_export_3d".freeze
+  ASSET    = "#{ID}.rbz".freeze
+  PAGE_URL = "https://github.com/#{REPO}/releases".freeze
+  # Папка разработки задана в самом расширении (корень репозитория):
+  # проверка обновления сначала смотрит её, потом GitHub.
+  DEV_DIR  = File.expand_path("..", __dir__).freeze
+  MANIFEST = { id: ID, repo: REPO, version: VERSION, asset: ASSET, dev_dir: DEV_DIR }.freeze
 
   def self.export_command
     @export_command ||= begin
@@ -244,7 +263,26 @@ module Dn1supExport3d
     menu.add_separator
     menu.add_item("Quick export current model to GLB") { menu_activate(:all) }
     menu.add_item("Quick export selection to GLB") { menu_activate(:selection) }
+    menu.add_separator
+    menu.add_item("Проверить обновления сейчас") do
+      if defined?(Dn1sup::Updater)
+        Dn1sup::Updater.check_local_first!(Dn1supExport3d::MANIFEST.merge(force: true, async: true))
+      else
+        UI.openURL(Dn1supExport3d::PAGE_URL)
+      end
+    end
+    menu.add_item("Страница релизов на GitHub") { UI.openURL(Dn1supExport3d::PAGE_URL) }
     create_toolbar
+    # Фоновая проверка обновлений один раз за сессию (не раньше 15 секунд,
+    # чтобы не мешать загрузке SketchUp).
+    unless $dn1sup_export_3d_update_check_scheduled
+      $dn1sup_export_3d_update_check_scheduled = true
+      if defined?(Dn1sup::Updater) && UI.respond_to?(:start_timer)
+        UI.start_timer(15, false) do
+          Dn1sup::Updater.check_local_first!(Dn1supExport3d::MANIFEST.merge(async: true))
+        end
+      end
+    end
     file_loaded("dn1sup_export_3d/main.rb")
   end
 end
