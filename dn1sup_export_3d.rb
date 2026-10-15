@@ -10,8 +10,8 @@ module Dn1supExport3d
     ext.description = "Export SketchUp models (or the current selection) to GLB and view them in a browser or HtmlDialog (Three.js)."
     require File.expand_path(File.join(__dir__, "dn1sup_export_3d", "version"))
     ext.version = VERSION
-    ext.creator = "dn1desn"
-    ext.copyright = "2026, dn1desn (MIT License)"
+    ext.creator = "DN1Sup"
+    ext.copyright = "2026 DN1Sup (MIT License)"
     ext.id = "dn1sup_export_3d" if ext.respond_to?(:id=)
     Sketchup.register_extension(ext, true)
   end
