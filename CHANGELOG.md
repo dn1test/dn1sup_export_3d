@@ -3,6 +3,17 @@
 Лог изменений **DN1Sup Export 3D** (`dn1sup_export_3d`).
 Формат версий соответствует правилам `MAJOR.MINOR.PATCH`.
 
+## [0.9.2] — 2026-10-15
+
+- chore: синхронизация общего апдейтера v3 (`UPDATER_VERSION = 3`,
+  `ensure_updater!` в менеджере догружает свою копию, если загруженная
+  старше) — чинит соседство копий разных версий в памяти SketchUp.
+- fix: `product_status` / `install_from_url` / `pick_freshest` принимают
+  позиционный Hash опций плюс kwargs (совместимость Ruby 2.7-упаковки) —
+  больше нет «wrong number of arguments (given 4, expected 3)» при
+  установке/проверке обновлений из Store.
+- chore: `ext.creator` / `ext.copyright` — `DN1Sup`.
+
 ## [0.9.1] — 2026-10-15
 
 - fix: `build/package.rb` пакует `.rbz` чистым Ruby (stdlib `zlib`)
