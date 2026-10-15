@@ -33,7 +33,7 @@ end
 # The Extension Store reads registry.json's version when checking updates;
 # both mirrors must match VERSION (AGENTS.md #36), otherwise the store card
 # would desynchronize from the shipped extension.
-require File.join(root, name, "version")
+require File.join(root, name, "version.rb")
 %w[registry.json web/package.json].each do |mirror|
   path = File.join(root, mirror)
   abort "Missing #{path} - cannot verify the version mirror." unless File.file?(path)
