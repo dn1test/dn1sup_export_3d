@@ -10,8 +10,9 @@ permissions:
 
 jobs:
   release:
-    # windows-latest: build/package.rb пакует bsdtar'ом (tar -a = ZIP по
-    # расширению .rbz); на ubuntu `tar` — GNU и так не умеет.
+    # windows-latest: детерминированное окружение сборки; сам ZIP пишет
+    # чистый Ruby (build/package.rb, stdlib zlib) — bsdtar (`tar -a`) не
+    # использовать: его ZIP SketchUp 2026 отклоняет при установке.
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

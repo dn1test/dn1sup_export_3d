@@ -368,7 +368,7 @@ ruby build/check_glb.rb path/to/model.glb
 ### Packaging
 
 ```
-ruby build/package.rb     # -> build/dn1sup_export_3d.rbz (uses bsdtar, no gems)
+ruby build/package.rb     # -> build/dn1sup_export_3d.rbz (pure-Ruby ZIP, no gems)
 ```
 
 ### Known limitations

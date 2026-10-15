@@ -3,6 +3,17 @@
 Лог изменений **DN1Sup Export 3D** (`dn1sup_export_3d`).
 Формат версий соответствует правилам `MAJOR.MINOR.PATCH`.
 
+## [0.9.1] — 2026-10-15
+
+- fix: `build/package.rb` пакует `.rbz` чистым Ruby (stdlib `zlib`)
+  вместо bsdtar (`tar -a`): ZIP от bsdtar SketchUp 2026 отклоняет при
+  установке («Could not unzip archive» — проверено живьём, в т.ч. на
+  минимальной пробе из 2 файлов); тот же состав через Deflate ставится
+  (`install_from_archive → true`), тесты зелёные.
+- fix: `require "tempfile"` под гардом `unless defined?(Tempfile)` —
+  в сессиях с посторонним загрузчиком повторный require ронял загрузку
+  (`superclass mismatch for class Tempfile`).
+
 ## [0.9.0] — 2026-10-15
 
 - fix: синхронизирован `dn1sup_updater.rb` с менеджером — `pick_freshest`

@@ -12,8 +12,8 @@
 | Имя `dn1sup_*` в аккаунте `dn1test` | ✅ `dn1test/dn1sup_export_3d`, remote `origin` настроен |
 | Не archived | ✅ |
 | `registry.json` в корне `main` | ✅ создан (id, name, description, version 0.9.0) |
-| Стабильные релизы с `.rbz` | ⏳ workflow `.github/workflows/release.yml` на месте — нужен push `main` и тег `v0.9.0` |
-| Теги `vMAJOR.MINOR.PATCH` | ⏳ проставьте тег `v0.9.0` при публикации |
+| Стабильные релизы с `.rbz` | ⏳ workflow `.github/workflows/release.yml` на месте — нужен push `main` и тег `v0.9.1` |
+| Теги `vMAJOR.MINOR.PATCH` | ⏳ проставьте тег `v0.9.1` при публикации |
 | Регистратор `<id>.rb` + `ext.id` | ✅ `ext.id = "dn1sup_export_3d"` задан |
 
 Осталось опубликовать:
@@ -21,7 +21,7 @@
 1. Закоммитьте изменения и запушьте ветку `main` (перед этим убедитесь,
    что собранные ассеты `dn1sup_export_3d/viewer/assets/` и `ui/assets/`
    закоммичены — их наличие требует `build/package.rb`).
-2. Релиз `v0.9.0`: тег → workflow соберёт
+2. Релиз `v0.9.1`: тег → workflow соберёт
    `build/dn1sup_export_3d.rbz` и приложит к релизу.
 3. Проверка Store: карточка `0.9.0`, установка через менеджер без
    «Исключение при установке» (апдейтер синхронизирован с менеджером).

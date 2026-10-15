@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
-require "tempfile"
+# NOTE: SketchUp sessions polluted by other loaders may already define Tempfile
+# without recording it in $LOADED_FEATURES (then a plain require re-executes
+# stdlib and dies with "superclass mismatch for class Tempfile").
+require "tempfile" unless defined?(Tempfile)
 require_relative "../logger"
 
 module Dn1supExport3d
