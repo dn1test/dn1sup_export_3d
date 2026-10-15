@@ -5,6 +5,6 @@
     "author": "DN1Sup",
     "description": "Export SketchUp models (or the current selection) to GLB and view them in a browser or HtmlDialog (Three.js).",
     "repo": "dn1test/dn1sup_export_3d",
-    "version": "0.9.4"
+    "version": "0.9.5"
   }
 ]
