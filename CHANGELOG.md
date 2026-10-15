@@ -3,8 +3,13 @@
 Лог изменений **DN1Sup Export 3D** (`dn1sup_export_3d`).
 Формат версий соответствует правилам `MAJOR.MINOR.PATCH`.
 
-## [0.9.0] — 2026-10-13
+## [0.9.0] — 2026-10-15
 
+- fix: синхронизирован `dn1sup_updater.rb` с менеджером — `pick_freshest`
+  с kwargs (`installed_at:`, `github_time:`, `local_time:`) плюс
+  `local_dev_mtime`/`to_unixtime`; чинит «Исключение при установке:
+  wrong number of arguments (given 4, expected 3)» из Store-менеджера,
+  когда старая копия модуля затирала новую.
 - Удалён функционал dev/prod (второй id `dn1sup_export_3d_dev`): удалены
   `DEV_BUILD`, поле `dev_build` в состоянии диалога и бейдж DEV в шапке.
   Разработка — рабочая копия под тем же id. Файлы `.sketchup_dev.json`
