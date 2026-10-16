@@ -3,6 +3,11 @@
 Лог изменений **DN1Sup Export 3D** (`dn1sup_export_3d`).
 Формат версий соответствует правилам `MAJOR.MINOR.PATCH`.
 
+## [0.9.6] — 2026-10-16
+
+- fix(test): `write_png` в `test/test_helper.rb` создаёт каталог назначения
+  (`mkdir_p`) перед записью PNG-фикстуры — убран `ENOENT` при чистом tmp.
+
 ## [0.9.5] — 2026-10-16
 
 - chore: убран переходный чек маркера `.sketchup_dev.json` из `dev_source?`

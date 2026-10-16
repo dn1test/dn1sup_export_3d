@@ -122,6 +122,7 @@ module Dn1supTest
     png << chunk.call("IHDR", [width, height, 8, 6, 0, 0, 0].pack("NNCCCCC"))
     png << chunk.call("IDAT", idat)
     png << chunk.call("IEND", "")
+    FileUtils.mkdir_p(File.dirname(path))
     File.binwrite(path, png)
     path
   end
