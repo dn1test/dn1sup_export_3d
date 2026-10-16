@@ -23,7 +23,7 @@ defineEmits(["toggle-panel", "fit", "reset", "wire", "edges", "screenshot", "ful
     </IconButton>
 
     <div class="mx-1 flex min-w-0 items-center gap-2">
-      <Icon name="cube" class="shrink-0 text-sky-400" :size="18" />
+      <img src="../../assets/logo.svg" width="20" height="20" class="shrink-0" alt="DN1Sup Export 3D">
       <span class="min-w-0 truncate text-sm font-medium text-zinc-100" :title="modelName">{{ modelName }}</span>
     </div>
 

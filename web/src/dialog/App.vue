@@ -230,6 +230,7 @@ function closeDialog() {
     <aside class="flex w-[370px] shrink-0 flex-col border-l border-zinc-200 bg-zinc-50">
       <header class="border-b border-zinc-200 px-4 py-2.5">
         <div class="flex items-center gap-2">
+          <img src="../assets/logo.svg" width="20" height="20" class="shrink-0" alt="DN1Sup Export 3D">
           <h1 class="text-sm font-semibold text-zinc-800">Экспорт 3D</h1>
           <button
             type="button"
