@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <defs>
+    <linearGradient id="e3dBadge" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#22c55e"/><stop offset="100%" stop-color="#16a34a"/></linearGradient>
+  </defs>
+  <path d="M12 3.5 18 7 12 10.5 6 7Z" fill="#5AB8F5" stroke="#ffffff" stroke-width=".6" stroke-linejoin="round"/>
+  <path d="M6 7 12 10.5V19L6 15.5Z" fill="#0c8ee9" stroke="#ffffff" stroke-width=".6" stroke-linejoin="round"/>
+  <path d="M18 7 12 10.5V19l6-3.5Z" fill="#015995" stroke="#ffffff" stroke-width=".6" stroke-linejoin="round"/>
+  <circle cx="17" cy="17" r="4.6" fill="url(#e3dBadge)" stroke="#ffffff" stroke-width="1"/>
+  <path d="M14.8 19.2l4.4-4.4" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M15.8 14.8h3.4v3.4" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

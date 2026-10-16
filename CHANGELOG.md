@@ -3,6 +3,16 @@
 Лог изменений **DN1Sup Export 3D** (`dn1sup_export_3d`).
 Формат версий соответствует правилам `MAJOR.MINOR.PATCH`.
 
+## [0.9.7] — 2026-10-16
+
+- feat: новая иконка тулбара — куб + зелёный бейдж со стрелкой экспорта:
+  новый векторный исходник `dn1sup_export_3d/icons/export.svg`, растры
+  `export_16.png` / `export_24.png` перегенерированы скриптом
+  `tools/make_icons.rb` (чистый Ruby, 4x суперсэмплинг).
+- fix: `write_png` в `tools/make_icons.rb` пишет корректный IHDR (13 байт,
+  `N2 + C5`) — вариант `pack("N5")` из `dn1sup_create_project` даёт 20 байт
+  и невалидный PNG.
+
 ## [0.9.6] — 2026-10-16
 
 - fix(test): `write_png` в `test/test_helper.rb` создаёт каталог назначения
