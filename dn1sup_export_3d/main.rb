@@ -27,10 +27,8 @@ module Dn1supExport3d
   REPO     = "dn1test/dn1sup_export_3d".freeze
   ASSET    = "#{ID}.rbz".freeze
   PAGE_URL = "https://github.com/#{REPO}/releases".freeze
-  # Папка разработки задана в самом расширении (корень репозитория):
-  # проверка обновления сначала смотрит её, потом GitHub.
-  DEV_DIR  = File.expand_path("..", __dir__).freeze
-  MANIFEST = { id: ID, repo: REPO, version: VERSION, asset: ASSET, dev_dir: DEV_DIR }.freeze
+  # Обновление — только из GitHub Releases (релиз + registry.json репозитория).
+  MANIFEST = { id: ID, repo: REPO, version: VERSION, asset: ASSET }.freeze
 
   def self.export_command
     @export_command ||= begin
@@ -266,7 +264,7 @@ module Dn1supExport3d
     menu.add_separator
     menu.add_item("Проверить обновления сейчас") do
       if defined?(Dn1sup::Updater)
-        Dn1sup::Updater.check_local_first!(Dn1supExport3d::MANIFEST.merge(force: true, async: true))
+        Dn1sup::Updater.check!(Dn1supExport3d::MANIFEST.merge(force: true, async: true))
       else
         UI.openURL(Dn1supExport3d::PAGE_URL)
       end
@@ -279,7 +277,7 @@ module Dn1supExport3d
       $dn1sup_export_3d_update_check_scheduled = true
       if defined?(Dn1sup::Updater) && UI.respond_to?(:start_timer)
         UI.start_timer(15, false) do
-          Dn1sup::Updater.check_local_first!(Dn1supExport3d::MANIFEST.merge(async: true))
+          Dn1sup::Updater.check!(Dn1supExport3d::MANIFEST.merge(async: true))
         end
       end
     end

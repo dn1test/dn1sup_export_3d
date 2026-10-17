@@ -2,5 +2,5 @@
 
 # Single authoritative source of the extension version (see AGENTS.md #36).
 module Dn1supExport3d
-  VERSION = "0.9.9".freeze
+  VERSION = "0.9.10".freeze
 end

@@ -120,11 +120,11 @@ module Dn1supExport3d
       @dialog.add_action_callback("open_folder") { open_folder }
       @dialog.add_action_callback("open_html") { open_html }
       @dialog.add_action_callback("close") { @dialog.close }
-      # Кнопка «круг со стрелками» в шапке: сначала локальная папка
-      # (DEV_DIR из MANIFEST), потом GitHub — ставится свежайшее.
+      # Кнопка «круг со стрелками» в шапке: проверка обновлений на GitHub
+      # (релиз + registry.json репозитория).
       @dialog.add_action_callback("check_update") do
         if defined?(Dn1sup::Updater)
-          Dn1sup::Updater.check_local_first!(Dn1supExport3d::MANIFEST.merge(force: true, async: true))
+          Dn1sup::Updater.check!(Dn1supExport3d::MANIFEST.merge(force: true, async: true))
         else
           UI.openURL(Dn1supExport3d::PAGE_URL)
         end
