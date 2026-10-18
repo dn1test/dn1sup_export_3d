@@ -56,6 +56,13 @@ module Dn1supExport3d
 
   def self.create_toolbar
     return @toolbar if @toolbar
+    # Общая панель DN1Sup дублирует эту кнопку: пока не включён параметр
+    # «Показывать отдельные тулбары расширений», свой тулбар не создаём —
+    # тогда его нет и в списке панелей SketchUp.
+    if Sketchup.respond_to?(:read_default) &&
+       !Sketchup.read_default('DN1Sup ExtManager', 'shared_toolbar_show_individual')
+      return nil
+    end
     @toolbar = UI::Toolbar.new(MENU_TITLE)
     @toolbar.add_item(export_command)
     @toolbar.restore
