@@ -19,6 +19,18 @@ if defined?(Sketchup) && Sketchup.respond_to?(:require)
   end
 end
 
+# Общий корень меню всех расширений DN1Sup: подменю «DN1Sup» в «Extensions»
+# (соглашение экосистемы). add_submenu не умеет искать по имени, поэтому меню
+# кэшируется в ivar модуля — кто загрузился первым, тот его и создал.
+module Dn1sup
+  def self.common_menu
+    @common_menu ||= begin
+      legacy = (defined?($dn1sup_common_menu) && $dn1sup_common_menu) || (defined?($dn1sup_menu) && $dn1sup_menu)
+      legacy || UI.menu("Extensions").add_submenu("DN1Sup")
+    end
+  end
+end
+
 module Dn1supExport3d
   MENU_TITLE = "Web 3D Export"
   ICONS_DIR = File.join(__dir__, "icons")
@@ -256,7 +268,7 @@ end
 
 module Dn1supExport3d
   unless file_loaded?("dn1sup_export_3d/main.rb")
-    menu = UI.menu("Plugins").add_submenu(MENU_TITLE)
+    menu = Dn1sup.common_menu.add_submenu(MENU_TITLE)
     menu.add_item(export_command)
     menu.add_separator
     menu.add_item("Quick export current model to GLB") { menu_activate(:all) }
